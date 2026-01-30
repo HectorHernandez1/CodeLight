@@ -90,11 +90,23 @@ body {
    App Layout
    ============================================ */
 
+/* Title bar for window dragging (macOS) */
+#title-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background-color: var(--bg-secondary);
+  -webkit-app-region: drag;
+  z-index: 100;
+}
+
 #app {
   display: flex;
   height: 100%;
   padding-top: 28px;
-  /* Room for macOS traffic lights */
+  /* Room for title bar */
 }
 
 /* ============================================

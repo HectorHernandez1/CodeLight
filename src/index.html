@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:;">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:;">
   <title>CodeLight</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
+  <!-- Title bar for window dragging -->
+  <div id="title-bar"></div>
+
   <div id="app">
     <!-- Sidebar -->
     <div id="sidebar">
@@ -58,4 +64,5 @@
 
   <script src="renderer.js" type="module"></script>
 </body>
+
 </html>
