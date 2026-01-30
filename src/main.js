@@ -319,20 +319,33 @@ ipcMain.handle('get-git-status', async (event, folderPath) => {
 
         for (const line of lines) {
           const code = line.substring(0, 2);
-          const filePath = line.substring(3);
-          const fullPath = path.join(folderPath, filePath);
+          // Handle paths that may have quotes or spaces
+          let filePath = line.substring(3).replace(/^"/, '').replace(/"$/, '');
+          const fullPath = path.normalize(path.join(folderPath, filePath));
 
           // Parse git status codes
+          let fileStatus;
           if (code.includes('M')) {
-            status[fullPath] = 'modified';
+            fileStatus = 'modified';
           } else if (code.includes('A') || code === '??') {
-            status[fullPath] = 'added';
+            fileStatus = 'added';
           } else if (code.includes('D')) {
-            status[fullPath] = 'deleted';
+            fileStatus = 'deleted';
           } else if (code.includes('R')) {
-            status[fullPath] = 'renamed';
+            fileStatus = 'renamed';
           } else {
-            status[fullPath] = 'changed';
+            fileStatus = 'changed';
+          }
+
+          status[fullPath] = fileStatus;
+
+          // Also mark all parent directories
+          let parentPath = path.dirname(fullPath);
+          while (parentPath !== folderPath && parentPath.startsWith(folderPath)) {
+            if (!status[parentPath]) {
+              status[parentPath] = 'modified'; // Folders with changes show as modified
+            }
+            parentPath = path.dirname(parentPath);
           }
         }
 
