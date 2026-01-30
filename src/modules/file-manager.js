@@ -39,10 +39,30 @@ export class FileManager {
         const container = document.getElementById('file-tree');
         container.innerHTML = '';
 
-        const rootItem = await this.createTreeItem(folderPath, true, true);
-        if (rootItem) {
-            container.appendChild(rootItem);
+        // Create parent folder header at the top
+        const folderName = folderPath.split('/').pop();
+        const headerItem = document.createElement('div');
+        headerItem.className = 'tree-item tree-root-header';
+        headerItem.innerHTML = `
+            <span class="tree-item-icon">📂</span>
+            <span class="tree-item-name">${folderName}</span>
+        `;
+        container.appendChild(headerItem);
+
+        // Create children container for folder contents
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'tree-children';
+
+        const result = await window.electronAPI.readDirectory(folderPath);
+        if (result.success) {
+            for (const child of result.items) {
+                const childItem = await this.createTreeItem(child.path, child.isDirectory);
+                if (childItem) {
+                    childrenContainer.appendChild(childItem);
+                }
+            }
         }
+        container.appendChild(childrenContainer);
     }
 
     async createTreeItem(itemPath, isDirectory, isRoot = false) {
