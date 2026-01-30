@@ -109,6 +109,12 @@ export class FileManager {
             item.classList.add(`git-${gitStatus}`);
         }
 
+        // Check if file has unsaved changes (higher priority indicator)
+        const unsavedTab = this.app.tabs.find(t => t.path === itemPath && t.modified);
+        if (unsavedTab) {
+            item.classList.add('file-unsaved');
+        }
+
         const icon = document.createElement('span');
         icon.className = 'tree-item-icon';
 

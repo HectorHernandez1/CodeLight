@@ -234,6 +234,14 @@ body {
   font-size: 10px;
 }
 
+/* Unsaved file indicator (orange, higher priority than git status) */
+.tree-item.file-unsaved .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #D19A66;
+  font-size: 10px;
+}
+
 /* ============================================
    Main Content
    ============================================ */
