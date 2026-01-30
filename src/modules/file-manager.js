@@ -60,6 +60,13 @@ export class FileManager {
             <span class="tree-item-icon">📂</span>
             <span class="tree-item-name">${folderName}</span>
         `;
+
+        // Add right-click context menu for root folder
+        headerItem.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this.showContextMenu(e.clientX, e.clientY, folderPath, true);
+        });
+
         container.appendChild(headerItem);
 
         // Create children container for folder contents
