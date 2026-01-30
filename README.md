@@ -2,8 +2,6 @@
 
 A lightweight, minimalist code editor for macOS.
 
-![CodeLight](assets/screenshot.png)
-
 ## Features
 
 - 🎨 **Syntax Highlighting** - 50+ languages supported via Monaco Editor
