@@ -159,6 +159,13 @@ export class FileManager {
             });
         }
 
+        // Add right-click context menu for copying path
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showContextMenu(e.clientX, e.clientY, itemPath, isDirectory);
+        });
+
         item.appendChild(icon);
         item.appendChild(nameSpan);
 
@@ -168,6 +175,50 @@ export class FileManager {
         } else {
             return item;
         }
+    }
+
+    showContextMenu(x, y, itemPath, isDirectory) {
+        // Remove any existing context menu
+        const existing = document.querySelector('.context-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+
+        const copyPathItem = document.createElement('div');
+        copyPathItem.className = 'context-menu-item';
+        copyPathItem.textContent = isDirectory ? 'Copy Folder Path' : 'Copy File Path';
+        copyPathItem.addEventListener('click', () => {
+            navigator.clipboard.writeText(itemPath);
+            menu.remove();
+        });
+
+        menu.appendChild(copyPathItem);
+
+        // Add "Copy Name" option
+        const copyNameItem = document.createElement('div');
+        copyNameItem.className = 'context-menu-item';
+        copyNameItem.textContent = 'Copy Name';
+        copyNameItem.addEventListener('click', () => {
+            const name = itemPath.split('/').pop();
+            navigator.clipboard.writeText(name);
+            menu.remove();
+        });
+
+        menu.appendChild(copyNameItem);
+
+        document.body.appendChild(menu);
+
+        // Close menu when clicking elsewhere
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
     getFileIcon(filename) {
