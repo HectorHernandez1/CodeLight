@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
     showSaveDialog: () => ipcRenderer.invoke('show-save-dialog'),
     getAppPath: () => ipcRenderer.invoke('get-app-path'),
+    getGitStatus: (folderPath) => ipcRenderer.invoke('get-git-status', folderPath),
 
     // Menu event listeners
     onNewFile: (callback) => ipcRenderer.on('menu-new-file', callback),

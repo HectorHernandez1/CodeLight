@@ -32,3 +32,8 @@ directories:
 
 asar: true
 compression: maximum
+
+publish:
+  provider: github
+  owner: HectorHernandez1
+  repo: CodeLight

@@ -1,6 +1,11 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs').promises;
+
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
 // Keep track of all windows
 let windows = [];
@@ -290,15 +295,94 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
   }
 });
 
-ipcMain.handle('show-save-dialog', async () => {
-  const result = await dialog.showSaveDialog(mainWindow, {
+ipcMain.handle('show-save-dialog', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showSaveDialog(win, {
     filters: [{ name: 'All Files', extensions: ['*'] }]
   });
   return result;
 });
 
+ipcMain.handle('get-git-status', async (event, folderPath) => {
+  try {
+    const { exec } = require('child_process');
+    return new Promise((resolve) => {
+      exec('git status --porcelain', { cwd: folderPath }, (error, stdout, stderr) => {
+        if (error) {
+          // Not a git repo or git not installed
+          resolve({ success: false, error: error.message });
+          return;
+        }
+
+        const status = {};
+        const lines = stdout.trim().split('\n').filter(line => line);
+
+        for (const line of lines) {
+          const code = line.substring(0, 2);
+          const filePath = line.substring(3);
+          const fullPath = path.join(folderPath, filePath);
+
+          // Parse git status codes
+          if (code.includes('M')) {
+            status[fullPath] = 'modified';
+          } else if (code.includes('A') || code === '??') {
+            status[fullPath] = 'added';
+          } else if (code.includes('D')) {
+            status[fullPath] = 'deleted';
+          } else if (code.includes('R')) {
+            status[fullPath] = 'renamed';
+          } else {
+            status[fullPath] = 'changed';
+          }
+        }
+
+        resolve({ success: true, status });
+      });
+    });
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
+});
+
+// Auto-update event handlers
+autoUpdater.on('update-available', (info) => {
+  const win = getFocusedWindow();
+  if (win) {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update Available',
+      message: `Version ${info.version} is available. Would you like to download it?`,
+      buttons: ['Download', 'Later']
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  const win = getFocusedWindow();
+  if (win) {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update Ready',
+      message: `Version ${info.version} has been downloaded. Restart now to install?`,
+      buttons: ['Restart', 'Later']
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  }
+});
+
+autoUpdater.on('error', (err) => {
+  console.log('Auto-update error:', err);
 });
 
 // App lifecycle
@@ -306,6 +390,11 @@ app.whenReady().then(async () => {
   await loadWindowState();
   createMenu();
   createWindow();
+
+  // Check for updates (only in production)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

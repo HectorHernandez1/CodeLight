@@ -5,6 +5,7 @@ export class FileManager {
     constructor(app) {
         this.app = app;
         this.recentFiles = [];
+        this.gitStatus = {}; // Track git file statuses
         this.loadRecentFiles();
     }
 
@@ -29,8 +30,20 @@ export class FileManager {
         this.saveRecentFiles();
     }
 
+    async refreshGitStatus() {
+        if (!this.app.openFolder) return;
+
+        const result = await window.electronAPI.getGitStatus(this.app.openFolder);
+        if (result.success) {
+            this.gitStatus = result.status;
+        } else {
+            this.gitStatus = {};
+        }
+    }
+
     async openFolder(folderPath) {
         this.app.openFolder = folderPath;
+        await this.refreshGitStatus();
         await this.renderFileTree(folderPath);
         this.app.saveSession();
     }
@@ -82,6 +95,12 @@ export class FileManager {
         const item = document.createElement('div');
         item.className = 'tree-item';
         item.dataset.path = itemPath;
+
+        // Add git status class if applicable
+        const gitStatus = this.gitStatus[itemPath];
+        if (gitStatus) {
+            item.classList.add(`git-${gitStatus}`);
+        }
 
         const icon = document.createElement('span');
         icon.className = 'tree-item-icon';

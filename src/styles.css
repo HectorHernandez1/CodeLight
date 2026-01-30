@@ -198,6 +198,42 @@ body {
   cursor: default;
 }
 
+/* Git status indicators */
+.tree-item.git-modified .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #E5C07B;
+  font-size: 10px;
+}
+
+.tree-item.git-added .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #98C379;
+  font-size: 10px;
+}
+
+.tree-item.git-deleted .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #E06C75;
+  font-size: 10px;
+}
+
+.tree-item.git-renamed .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #61AFEF;
+  font-size: 10px;
+}
+
+.tree-item.git-changed .tree-item-name::after {
+  content: '●';
+  margin-left: 6px;
+  color: #C678DD;
+  font-size: 10px;
+}
+
 /* ============================================
    Main Content
    ============================================ */
