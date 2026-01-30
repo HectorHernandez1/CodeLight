@@ -1,0 +1,34 @@
+appId: com.codelight.app
+productName: CodeLight
+copyright: Copyright © 2026 Hector
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+  icon: assets/icon.png
+  darkModeSupport: true
+
+dmg:
+  title: CodeLight
+  icon: assets/icon.png
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+files:
+  - src/**/*
+  - assets/**/*
+  - node_modules/**/*
+  - "!node_modules/*/{CHANGELOG.md,README.md,readme.md,test,__tests__,tests,*.ts}"
+
+directories:
+  output: dist
+  buildResources: assets
+
+asar: true
+compression: maximum

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:;">
+  <title>CodeLight</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <span class="sidebar-title">EXPLORER</span>
+      </div>
+      <div id="file-tree"></div>
+    </div>
+
+    <!-- Main content area -->
+    <div id="main-content">
+      <!-- Tab bar -->
+      <div id="tab-bar">
+        <div id="tabs"></div>
+      </div>
+
+      <!-- Editor container -->
+      <div id="editor-container"></div>
+
+      <!-- Status bar -->
+      <div id="status-bar">
+        <div id="status-left">
+          <span id="status-position">Ln 1, Col 1</span>
+        </div>
+        <div id="status-right">
+          <span id="status-language">Plain Text</span>
+          <span id="status-encoding">UTF-8</span>
+          <span id="status-eol">LF</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick open modal -->
+  <div id="quick-open-modal" class="modal hidden">
+    <div class="modal-content">
+      <input type="text" id="quick-open-input" placeholder="Search files by name...">
+      <div id="quick-open-results"></div>
+    </div>
+  </div>
+
+  <!-- Go to line modal -->
+  <div id="goto-line-modal" class="modal hidden">
+    <div class="modal-content small">
+      <input type="text" id="goto-line-input" placeholder="Go to line...">
+    </div>
+  </div>
+
+  <script src="renderer.js" type="module"></script>
+</body>
+</html>
