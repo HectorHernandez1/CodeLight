@@ -12,6 +12,9 @@ const MONACO_PATH = '../node_modules/monaco-editor/min/vs';
 class CodeLightApp {
     constructor() {
         this.editor = null;
+        this.splitEditor = null;
+        this.isSplitView = false;
+        this.splitTabId = null;
         this.tabs = [];
         this.activeTabId = null;
         this.fontSize = 13;
@@ -40,6 +43,9 @@ class CodeLightApp {
 
         // Set up sidebar resize functionality
         this.setupSidebarResize();
+
+        // Set up split view resize functionality
+        this.setupSplitResize();
 
         // Restore last session
         await this.restoreSession();
@@ -163,9 +169,41 @@ class CodeLightApp {
                         }
                     });
 
+                    // Create split editor (initially hidden)
+                    this.splitEditor = monaco.editor.create(document.getElementById('editor-container-split'), {
+                        value: '',
+                        language: 'plaintext',
+                        theme: document.body.classList.contains('light-theme') ? 'codelight-light' : 'codelight-dark',
+                        fontSize: this.fontSize,
+                        fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                        lineNumbers: 'on',
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        wordWrap: this.wordWrap,
+                        automaticLayout: true,
+                        folding: true,
+                        renderWhitespace: 'selection',
+                        tabSize: 2,
+                        insertSpaces: true,
+                        cursorBlinking: 'smooth',
+                        cursorSmoothCaretAnimation: 'on',
+                        smoothScrolling: true,
+                        padding: { top: 10 }
+                    });
+
+                    // Track content changes in split editor
+                    this.splitEditor.onDidChangeModelContent(() => {
+                        if (this.splitTabId) {
+                            this.markTabModified(this.splitTabId);
+                        }
+                    });
+
                     // Handle window resize
                     window.addEventListener('resize', () => {
                         this.editor.layout();
+                        if (this.isSplitView) {
+                            this.splitEditor.layout();
+                        }
                     });
 
                     resolve();
@@ -193,6 +231,7 @@ class CodeLightApp {
         electronAPI.onFontReset(() => this.resetFontSize());
         electronAPI.onToggleWordWrap(() => this.toggleWordWrap());
         electronAPI.onQuickOpen(() => this.showQuickOpen());
+        electronAPI.onToggleSplit(() => this.toggleSplitView());
     }
 
     setupSidebarResize() {
@@ -244,6 +283,59 @@ class CodeLightApp {
         document.addEventListener('mouseup', onMouseUp);
     }
 
+    setupSplitResize() {
+        const handle = document.getElementById('split-resize-handle');
+        const leftPane = document.getElementById('editor-container');
+        const rightPane = document.getElementById('editor-container-split');
+
+        if (!handle || !leftPane || !rightPane) return;
+
+        let isResizing = false;
+        let startX = 0;
+        let startLeftWidth = 0;
+
+        const onMouseDown = (e) => {
+            if (!this.isSplitView) return;
+            isResizing = true;
+            startX = e.clientX;
+            startLeftWidth = leftPane.offsetWidth;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        };
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+
+            const wrapper = document.getElementById('editor-wrapper');
+            const wrapperWidth = wrapper.offsetWidth;
+            const deltaX = e.clientX - startX;
+            const newLeftWidth = Math.min(wrapperWidth - 200, Math.max(200, startLeftWidth + deltaX));
+
+            leftPane.style.flex = 'none';
+            leftPane.style.width = `${newLeftWidth}px`;
+            rightPane.style.flex = '1';
+
+            // Trigger editor layout updates
+            if (this.editor) this.editor.layout();
+            if (this.splitEditor) this.splitEditor.layout();
+        };
+
+        const onMouseUp = () => {
+            if (isResizing) {
+                isResizing = false;
+                handle.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        };
+
+        handle.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
     // === Tab Management ===
 
     createTab(filePath, content, isNew = false) {
@@ -270,16 +362,24 @@ class CodeLightApp {
         const tab = this.tabs.find(t => t.id === id);
         if (!tab) return;
 
-        // Save current model content before switching
+        // Save current tab state before switching
         if (this.activeTabId) {
             const currentTab = this.tabs.find(t => t.id === this.activeTabId);
             if (currentTab) {
                 currentTab.content = this.editor.getValue();
+                // Save view state (scroll position, cursor position, selections)
+                currentTab.viewState = this.editor.saveViewState();
             }
         }
 
         this.activeTabId = id;
         this.editor.setModel(tab.model);
+
+        // Restore view state if available
+        if (tab.viewState) {
+            this.editor.restoreViewState(tab.viewState);
+        }
+
         this.updateStatusBar();
         this.renderTabs();
         this.updateEmptyState();
@@ -290,6 +390,11 @@ class CodeLightApp {
         if (index === -1) return;
 
         const tab = this.tabs[index];
+
+        // If this tab is in split view, close split view first
+        if (this.splitTabId === id) {
+            this.closeSplitView();
+        }
 
         // TODO: Prompt to save if modified
 
@@ -331,9 +436,11 @@ class CodeLightApp {
 
         this.tabs.forEach(tab => {
             const tabEl = document.createElement('div');
-            tabEl.className = `tab ${tab.id === this.activeTabId ? 'active' : ''} ${tab.modified ? 'modified' : ''}`;
+            const isSplit = this.isSplitView && tab.id === this.splitTabId;
+            tabEl.className = `tab ${tab.id === this.activeTabId ? 'active' : ''} ${tab.modified ? 'modified' : ''} ${isSplit ? 'split' : ''}`;
             tabEl.innerHTML = `
         <span class="tab-name">${tab.name}</span>
+        ${isSplit ? '<span class="tab-split-indicator">⫿</span>' : ''}
         <span class="tab-close">×</span>
       `;
 
@@ -346,8 +453,181 @@ class CodeLightApp {
                 this.closeTab(tab.id);
             });
 
+            // Add right-click context menu
+            tabEl.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showTabContextMenu(e.clientX, e.clientY, tab.id);
+            });
+
             container.appendChild(tabEl);
         });
+    }
+
+    showTabContextMenu(x, y, tabId) {
+        // Remove any existing context menu
+        const existing = document.querySelector('.context-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+
+        // Close option
+        const closeItem = document.createElement('div');
+        closeItem.className = 'context-menu-item';
+        closeItem.textContent = 'Close';
+        closeItem.addEventListener('click', () => {
+            this.closeTab(tabId);
+            menu.remove();
+        });
+        menu.appendChild(closeItem);
+
+        // Close Others option
+        const closeOthersItem = document.createElement('div');
+        closeOthersItem.className = 'context-menu-item';
+        closeOthersItem.textContent = 'Close Others';
+        closeOthersItem.addEventListener('click', () => {
+            this.closeAllTabsExcept(tabId);
+            menu.remove();
+        });
+        menu.appendChild(closeOthersItem);
+
+        // Close All option
+        const closeAllItem = document.createElement('div');
+        closeAllItem.className = 'context-menu-item';
+        closeAllItem.textContent = 'Close All';
+        closeAllItem.addEventListener('click', () => {
+            this.closeAllTabs();
+            menu.remove();
+        });
+        menu.appendChild(closeAllItem);
+
+        // Separator
+        const separator = document.createElement('div');
+        separator.className = 'context-menu-separator';
+        menu.appendChild(separator);
+
+        // Open in Split View option
+        const splitItem = document.createElement('div');
+        splitItem.className = 'context-menu-item';
+        splitItem.textContent = this.isSplitView && this.splitTabId === tabId ? 'Close Split View' : 'Open in Split View';
+        splitItem.addEventListener('click', () => {
+            if (this.isSplitView && this.splitTabId === tabId) {
+                this.closeSplitView();
+            } else {
+                this.openInSplitView(tabId);
+            }
+            menu.remove();
+        });
+        menu.appendChild(splitItem);
+
+        document.body.appendChild(menu);
+
+        // Close menu when clicking elsewhere
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    }
+
+    closeAllTabsExcept(tabId) {
+        const tabsToClose = this.tabs.filter(t => t.id !== tabId);
+        tabsToClose.forEach(tab => this.closeTab(tab.id));
+    }
+
+    closeAllTabs() {
+        const tabsToClose = [...this.tabs];
+        tabsToClose.forEach(tab => this.closeTab(tab.id));
+    }
+
+    // === Split View ===
+
+    openInSplitView(tabId) {
+        const tab = this.tabs.find(t => t.id === tabId);
+        if (!tab) return;
+
+        // Save current split editor state if there was one
+        if (this.splitTabId) {
+            const prevSplitTab = this.tabs.find(t => t.id === this.splitTabId);
+            if (prevSplitTab) {
+                prevSplitTab.splitViewState = this.splitEditor.saveViewState();
+            }
+        }
+
+        // Show split view elements
+        const splitContainer = document.getElementById('editor-container-split');
+        const splitHandle = document.getElementById('split-resize-handle');
+
+        splitContainer.classList.remove('hidden');
+        splitHandle.classList.remove('hidden');
+
+        this.isSplitView = true;
+        this.splitTabId = tabId;
+
+        // Set the model in split editor
+        this.splitEditor.setModel(tab.model);
+
+        // Restore view state if available
+        if (tab.splitViewState) {
+            this.splitEditor.restoreViewState(tab.splitViewState);
+        }
+
+        // Update empty state
+        splitContainer.classList.remove('empty');
+
+        // Layout editors
+        this.editor.layout();
+        this.splitEditor.layout();
+
+        // Render tabs to show split indicator
+        this.renderTabs();
+    }
+
+    closeSplitView() {
+        // Save split editor state
+        if (this.splitTabId) {
+            const splitTab = this.tabs.find(t => t.id === this.splitTabId);
+            if (splitTab) {
+                splitTab.splitViewState = this.splitEditor.saveViewState();
+            }
+        }
+
+        // Hide split view elements
+        const splitContainer = document.getElementById('editor-container-split');
+        const splitHandle = document.getElementById('split-resize-handle');
+        const leftPane = document.getElementById('editor-container');
+
+        splitContainer.classList.add('hidden');
+        splitHandle.classList.add('hidden');
+
+        // Reset left pane width
+        leftPane.style.flex = '1';
+        leftPane.style.width = '';
+
+        this.isSplitView = false;
+        this.splitTabId = null;
+
+        // Clear split editor model
+        this.splitEditor.setModel(null);
+
+        // Layout main editor
+        this.editor.layout();
+
+        // Render tabs
+        this.renderTabs();
+    }
+
+    toggleSplitView() {
+        if (this.isSplitView) {
+            this.closeSplitView();
+        } else if (this.activeTabId) {
+            this.openInSplitView(this.activeTabId);
+        }
     }
 
     // === File Operations ===
@@ -617,6 +897,10 @@ class CodeLightApp {
     }
 
     async restoreSession() {
+        // Skip session restore for new windows
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('isNewWindow') === 'true') return;
+
         const session = await this.storage.get('session');
         if (!session) return;
 
