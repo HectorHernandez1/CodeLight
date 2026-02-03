@@ -16,6 +16,7 @@ class CodeLightApp {
         this.activeTabId = null;
         this.fontSize = 13;
         this.wordWrap = 'off';
+        this.sidebarWidth = 250;
         this.openFolder = null;
 
         // Initialize managers
@@ -37,6 +38,9 @@ class CodeLightApp {
         // Set up menu event listeners
         this.setupMenuListeners();
 
+        // Set up sidebar resize functionality
+        this.setupSidebarResize();
+
         // Restore last session
         await this.restoreSession();
 
@@ -49,9 +53,15 @@ class CodeLightApp {
         if (prefs) {
             this.fontSize = prefs.fontSize || 13;
             this.wordWrap = prefs.wordWrap || 'off';
+            this.sidebarWidth = prefs.sidebarWidth || 250;
             if (prefs.theme === 'light') {
                 document.body.classList.add('light-theme');
             }
+        }
+        // Apply stored sidebar width
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) {
+            sidebar.style.width = `${this.sidebarWidth}px`;
         }
     }
 
@@ -59,6 +69,7 @@ class CodeLightApp {
         await this.storage.set('preferences', {
             fontSize: this.fontSize,
             wordWrap: this.wordWrap,
+            sidebarWidth: this.sidebarWidth,
             theme: document.body.classList.contains('light-theme') ? 'light' : 'dark'
         });
     }
@@ -182,6 +193,55 @@ class CodeLightApp {
         electronAPI.onFontReset(() => this.resetFontSize());
         electronAPI.onToggleWordWrap(() => this.toggleWordWrap());
         electronAPI.onQuickOpen(() => this.showQuickOpen());
+    }
+
+    setupSidebarResize() {
+        const sidebar = document.getElementById('sidebar');
+        const handle = document.getElementById('sidebar-resize-handle');
+
+        if (!sidebar || !handle) return;
+
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const onMouseDown = (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = sidebar.offsetWidth;
+            handle.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        };
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+
+            const deltaX = e.clientX - startX;
+            const newWidth = Math.min(600, Math.max(150, startWidth + deltaX));
+            sidebar.style.width = `${newWidth}px`;
+            this.sidebarWidth = newWidth;
+
+            // Trigger editor layout update
+            if (this.editor) {
+                this.editor.layout();
+            }
+        };
+
+        const onMouseUp = () => {
+            if (isResizing) {
+                isResizing = false;
+                handle.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                this.savePreferences();
+            }
+        };
+
+        handle.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     }
 
     // === Tab Management ===

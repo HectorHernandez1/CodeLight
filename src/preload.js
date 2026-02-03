@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAppPath: () => ipcRenderer.invoke('get-app-path'),
     getGitStatus: (folderPath) => ipcRenderer.invoke('get-git-status', folderPath),
 
+    // File watching
+    watchFolder: (folderPath) => ipcRenderer.invoke('watch-folder', folderPath),
+    unwatchFolder: () => ipcRenderer.invoke('unwatch-folder'),
+    onFolderChanged: (callback) => ipcRenderer.on('folder-changed', (event, data) => callback(data)),
+
     // Menu event listeners
     onNewFile: (callback) => ipcRenderer.on('menu-new-file', callback),
     onOpenFile: (callback) => ipcRenderer.on('menu-open-file', (event, path) => callback(path)),

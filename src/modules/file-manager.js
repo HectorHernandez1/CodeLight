@@ -6,7 +6,26 @@ export class FileManager {
         this.app = app;
         this.recentFiles = [];
         this.gitStatus = {}; // Track git file statuses
+        this.isWatching = false;
         this.loadRecentFiles();
+        this.setupFolderWatcher();
+    }
+
+    setupFolderWatcher() {
+        // Listen for folder change events from the main process
+        window.electronAPI.onFolderChanged((data) => {
+            console.log('Folder changed:', data);
+            // Refresh the file tree when changes are detected
+            if (this.app.openFolder) {
+                this.refreshFileTree();
+            }
+        });
+    }
+
+    async refreshFileTree() {
+        // Refresh git status and re-render the tree
+        await this.refreshGitStatus();
+        await this.renderFileTree(this.app.openFolder);
     }
 
     async loadRecentFiles() {
@@ -42,10 +61,23 @@ export class FileManager {
     }
 
     async openFolder(folderPath) {
+        // Stop watching previous folder if any
+        if (this.isWatching) {
+            await window.electronAPI.unwatchFolder();
+            this.isWatching = false;
+        }
+
         this.app.openFolder = folderPath;
         await this.refreshGitStatus();
         await this.renderFileTree(folderPath);
         this.app.saveSession();
+
+        // Start watching the new folder
+        const result = await window.electronAPI.watchFolder(folderPath);
+        if (result.success) {
+            this.isWatching = true;
+            console.log('Started watching folder:', folderPath);
+        }
     }
 
     async renderFileTree(folderPath) {

@@ -1,11 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Configure auto-updater
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+// Auto-updater will be loaded lazily in production only
+let autoUpdater = null;
 
 // Keep track of all windows
 let windows = [];
@@ -18,11 +16,19 @@ let windowState = {
   y: undefined
 };
 
-const stateFilePath = path.join(app.getPath('userData'), 'window-state.json');
+// State file path (computed lazily after app is ready)
+let stateFilePath = null;
+
+function getStateFilePath() {
+  if (!stateFilePath) {
+    stateFilePath = path.join(app.getPath('userData'), 'window-state.json');
+  }
+  return stateFilePath;
+}
 
 async function loadWindowState() {
   try {
-    const data = await fs.readFile(stateFilePath, 'utf-8');
+    const data = await fs.readFile(getStateFilePath(), 'utf-8');
     windowState = JSON.parse(data);
   } catch (err) {
     // Use defaults if file doesn't exist
@@ -38,7 +44,7 @@ async function saveWindowState(win) {
       x: bounds.x,
       y: bounds.y
     };
-    await fs.writeFile(stateFilePath, JSON.stringify(windowState));
+    await fs.writeFile(getStateFilePath(), JSON.stringify(windowState));
   }
 }
 
@@ -361,41 +367,64 @@ ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
 });
 
-// Auto-update event handlers
-autoUpdater.on('update-available', (info) => {
-  const win = getFocusedWindow();
-  if (win) {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update Available',
-      message: `Version ${info.version} is available. Would you like to download it?`,
-      buttons: ['Download', 'Later']
-    }).then(result => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
+// File system watching
+const watchers = new Map();
+
+ipcMain.handle('watch-folder', async (event, folderPath) => {
+  try {
+    // Stop existing watcher for this window if any
+    const senderId = event.sender.id;
+    if (watchers.has(senderId)) {
+      watchers.get(senderId).close();
+    }
+
+    const { watch } = require('fs');
+
+    // Debounce mechanism to avoid rapid-fire events
+    let debounceTimer = null;
+
+    const watcher = watch(folderPath, { recursive: true }, (eventType, filename) => {
+      // Skip hidden files and common ignored patterns
+      if (filename && (
+        filename.startsWith('.') ||
+        filename.includes('node_modules') ||
+        filename.includes('.git') ||
+        filename.includes('__pycache__')
+      )) {
+        return;
       }
+
+      // Debounce: wait 300ms after the last change before notifying
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+
+      debounceTimer = setTimeout(() => {
+        // Send event to renderer
+        if (!event.sender.isDestroyed()) {
+          event.sender.send('folder-changed', { eventType, filename });
+        }
+      }, 300);
     });
+
+    watcher.on('error', (err) => {
+      console.log('Watcher error:', err);
+    });
+
+    watchers.set(senderId, watcher);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 
-autoUpdater.on('update-downloaded', (info) => {
-  const win = getFocusedWindow();
-  if (win) {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update Ready',
-      message: `Version ${info.version} has been downloaded. Restart now to install?`,
-      buttons: ['Restart', 'Later']
-    }).then(result => {
-      if (result.response === 0) {
-        autoUpdater.quitAndInstall();
-      }
-    });
+ipcMain.handle('unwatch-folder', async (event) => {
+  const senderId = event.sender.id;
+  if (watchers.has(senderId)) {
+    watchers.get(senderId).close();
+    watchers.delete(senderId);
   }
-});
-
-autoUpdater.on('error', (err) => {
-  console.log('Auto-update error:', err);
+  return { success: true };
 });
 
 // App lifecycle
@@ -404,9 +433,54 @@ app.whenReady().then(async () => {
   createMenu();
   createWindow();
 
-  // Check for updates (only in production)
+  // Initialize auto-updater only in production (packaged app)
   if (app.isPackaged) {
-    autoUpdater.checkForUpdates();
+    try {
+      const { autoUpdater: updater } = require('electron-updater');
+      autoUpdater = updater;
+      autoUpdater.autoDownload = false;
+      autoUpdater.autoInstallOnAppQuit = true;
+
+      autoUpdater.on('update-available', (info) => {
+        const win = getFocusedWindow();
+        if (win) {
+          dialog.showMessageBox(win, {
+            type: 'info',
+            title: 'Update Available',
+            message: `Version ${info.version} is available. Would you like to download it?`,
+            buttons: ['Download', 'Later']
+          }).then(result => {
+            if (result.response === 0) {
+              autoUpdater.downloadUpdate();
+            }
+          });
+        }
+      });
+
+      autoUpdater.on('update-downloaded', (info) => {
+        const win = getFocusedWindow();
+        if (win) {
+          dialog.showMessageBox(win, {
+            type: 'info',
+            title: 'Update Ready',
+            message: `Version ${info.version} has been downloaded. Restart now to install?`,
+            buttons: ['Restart', 'Later']
+          }).then(result => {
+            if (result.response === 0) {
+              autoUpdater.quitAndInstall();
+            }
+          });
+        }
+      });
+
+      autoUpdater.on('error', (err) => {
+        console.log('Auto-update error:', err);
+      });
+
+      autoUpdater.checkForUpdates();
+    } catch (err) {
+      console.log('Auto-updater not available:', err);
+    }
   }
 
   app.on('activate', () => {
