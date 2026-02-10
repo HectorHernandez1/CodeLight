@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onFontReset: (callback) => ipcRenderer.on('menu-font-reset', callback),
     onToggleWordWrap: (callback) => ipcRenderer.on('menu-toggle-word-wrap', callback),
     onQuickOpen: (callback) => ipcRenderer.on('menu-quick-open', callback),
+    onToggleSplit: (callback) => ipcRenderer.on('menu-toggle-split', callback),
 
     // Remove listeners
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)

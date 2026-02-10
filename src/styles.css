@@ -349,19 +349,64 @@ body {
   background-color: var(--bg-hover);
 }
 
+.tab.split {
+  border-bottom: 2px solid #98C379;
+}
+
+.tab-split-indicator {
+  margin-left: 4px;
+  color: #98C379;
+  font-size: 10px;
+}
+
 /* ============================================
    Editor Container
    ============================================ */
 
-#editor-container {
+#editor-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.editor-pane {
   flex: 1;
   overflow: hidden;
   background-color: var(--bg-primary);
+  min-width: 200px;
+}
+
+#editor-container-split {
+  border-left: 1px solid var(--border-color);
+}
+
+/* Split view resize handle */
+#split-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background-color: transparent;
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+#split-resize-handle:hover,
+#split-resize-handle.resizing {
+  background-color: var(--tab-active-border);
 }
 
 /* Welcome screen when no files open */
 #editor-container.empty::before {
   content: 'Open a file or folder to get started';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+#editor-container-split.empty::before {
+  content: 'Open a file in split view';
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,6 +540,12 @@ body {
 
 .context-menu-item:hover {
   background-color: var(--bg-hover);
+}
+
+.context-menu-separator {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 4px 0;
 }
 
 /* ============================================

@@ -76,7 +76,10 @@ function createWindow() {
 
   windows.push(win);
 
-  win.loadFile(path.join(__dirname, 'index.html'));
+  // Pass isNewWindow flag to skip session restore for new windows
+  win.loadFile(path.join(__dirname, 'index.html'), {
+    query: { isNewWindow: windows.length > 1 ? 'true' : '' }
+  });
 
   win.on('close', async () => {
     await saveWindowState(win);
@@ -232,6 +235,12 @@ function createMenu() {
           label: 'Toggle Word Wrap',
           accelerator: 'CmdOrCtrl+Alt+W',
           click: () => getFocusedWindow()?.webContents.send('menu-toggle-word-wrap')
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Split View',
+          accelerator: 'CmdOrCtrl+\\',
+          click: () => getFocusedWindow()?.webContents.send('menu-toggle-split')
         },
         { type: 'separator' },
         { role: 'toggleDevTools' }

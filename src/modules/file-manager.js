@@ -68,6 +68,13 @@ export class FileManager {
         }
 
         this.app.openFolder = folderPath;
+
+        // Close tabs that are not part of the new folder
+        const tabsToClose = this.app.tabs.filter(tab => {
+            // Close tabs outside the new folder (including untitled)
+            return !tab.path || !tab.path.startsWith(folderPath);
+        });
+        tabsToClose.forEach(tab => this.app.closeTab(tab.id));
         await this.refreshGitStatus();
         await this.renderFileTree(folderPath);
         this.app.saveSession();
