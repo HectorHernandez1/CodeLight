@@ -7,6 +7,7 @@ export class FileManager {
         this.recentFiles = [];
         this.gitStatus = {}; // Track git file statuses
         this.isWatching = false;
+        this.expandedFolders = new Set(); // Track expanded folder paths
         this.loadRecentFiles();
         this.setupFolderWatcher();
     }
@@ -23,9 +24,24 @@ export class FileManager {
     }
 
     async refreshFileTree() {
+        // Save expanded state before refresh
+        this.saveExpandedState();
         // Refresh git status and re-render the tree
         await this.refreshGitStatus();
         await this.renderFileTree(this.app.openFolder);
+        // Note: expanded state is now restored during renderFileTree via createTreeItem
+    }
+
+    saveExpandedState() {
+        // Capture current expanded folders from DOM before refresh
+        const expandedElements = document.querySelectorAll('.tree-folder.expanded');
+        if (expandedElements.length > 0) {
+            this.expandedFolders.clear();
+            expandedElements.forEach(el => {
+                const path = el.querySelector('.tree-item')?.dataset.path;
+                if (path) this.expandedFolders.add(path);
+            });
+        }
     }
 
     async loadRecentFiles() {
@@ -69,6 +85,9 @@ export class FileManager {
 
         this.app.openFolder = folderPath;
 
+        // Update dock menu with folder name (macOS)
+        window.electronAPI.setOpenFolder(folderPath);
+
         // Close tabs that are not part of the new folder
         const tabsToClose = this.app.tabs.filter(tab => {
             // Close tabs outside the new folder (including untitled)
@@ -78,6 +97,7 @@ export class FileManager {
         await this.refreshGitStatus();
         await this.renderFileTree(folderPath);
         this.app.saveSession();
+        this.app.updateStatusBar();
 
         // Start watching the new folder
         const result = await window.electronAPI.watchFolder(folderPath);
@@ -162,7 +182,10 @@ export class FileManager {
         nameSpan.textContent = name;
 
         if (isDirectory) {
-            icon.textContent = '📁';
+            // Check if this folder should be expanded (was previously expanded or is root)
+            const shouldExpand = isRoot || this.expandedFolders.has(itemPath);
+
+            icon.textContent = shouldExpand ? '📂' : '📁';
 
             item.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -170,7 +193,9 @@ export class FileManager {
                 // Toggle expanded state
                 wrapper.classList.toggle('expanded');
 
+                // Track expansion state
                 if (wrapper.classList.contains('expanded')) {
+                    this.expandedFolders.add(itemPath);
                     icon.textContent = '📂';
 
                     // Load children if not already loaded
@@ -191,14 +216,14 @@ export class FileManager {
                         wrapper.appendChild(childrenContainer);
                     }
                 } else {
+                    this.expandedFolders.delete(itemPath);
                     icon.textContent = '📁';
                 }
             });
 
-            if (isRoot) {
-                // Auto-expand root folder
+            // Auto-expand if needed (root folder or previously expanded)
+            if (shouldExpand) {
                 wrapper.classList.add('expanded');
-                icon.textContent = '📂';
 
                 const childrenContainer = document.createElement('div');
                 childrenContainer.className = 'tree-children';

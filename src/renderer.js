@@ -47,11 +47,15 @@ class CodeLightApp {
         // Set up split view resize functionality
         this.setupSplitResize();
 
+        // Set up status bar click handlers
+        this.setupStatusBarListeners();
+
         // Restore last session
         await this.restoreSession();
 
         // Update UI
         this.updateEmptyState();
+        this.updateStatusBar();
     }
 
     async loadPreferences() {
@@ -739,6 +743,94 @@ class CodeLightApp {
             document.getElementById('status-language').textContent =
                 this.getLanguageDisplayName(lang);
         }
+
+        // Update folder name in status bar
+        const folderEl = document.getElementById('status-folder');
+        if (this.openFolder) {
+            const folderName = this.openFolder.split('/').pop();
+            folderEl.textContent = `📁 ${folderName}`;
+            folderEl.title = this.openFolder;
+        } else {
+            folderEl.textContent = '';
+        }
+    }
+
+    setupStatusBarListeners() {
+        const folderEl = document.getElementById('status-folder');
+        if (folderEl) {
+            // Left click - copy path
+            folderEl.addEventListener('click', () => {
+                if (this.openFolder) {
+                    navigator.clipboard.writeText(this.openFolder);
+                }
+            });
+
+            // Right click - show context menu
+            folderEl.addEventListener('contextmenu', (e) => {
+                if (this.openFolder) {
+                    e.preventDefault();
+                    this.showFolderContextMenu(e.clientX, e.clientY);
+                }
+            });
+        }
+    }
+
+    showFolderContextMenu(x, y) {
+        // Remove any existing context menu
+        const existing = document.querySelector('.context-menu');
+        if (existing) existing.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y - 100}px`; // Position above the status bar
+
+        // Copy path option
+        const copyPathItem = document.createElement('div');
+        copyPathItem.className = 'context-menu-item';
+        copyPathItem.textContent = 'Copy Folder Path';
+        copyPathItem.addEventListener('click', () => {
+            navigator.clipboard.writeText(this.openFolder);
+            menu.remove();
+        });
+        menu.appendChild(copyPathItem);
+
+        // Copy name option
+        const copyNameItem = document.createElement('div');
+        copyNameItem.className = 'context-menu-item';
+        copyNameItem.textContent = 'Copy Folder Name';
+        copyNameItem.addEventListener('click', () => {
+            const folderName = this.openFolder.split('/').pop();
+            navigator.clipboard.writeText(folderName);
+            menu.remove();
+        });
+        menu.appendChild(copyNameItem);
+
+        // Separator
+        const separator = document.createElement('div');
+        separator.className = 'context-menu-separator';
+        menu.appendChild(separator);
+
+        // Open in Finder option
+        const openFinderItem = document.createElement('div');
+        openFinderItem.className = 'context-menu-item';
+        openFinderItem.textContent = 'Reveal in Finder';
+        openFinderItem.addEventListener('click', () => {
+            window.electronAPI.openInFinder?.(this.openFolder);
+            menu.remove();
+        });
+        menu.appendChild(openFinderItem);
+
+        document.body.appendChild(menu);
+
+        // Close menu when clicking elsewhere
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
     updateEmptyState() {

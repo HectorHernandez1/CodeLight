@@ -8,6 +8,9 @@ let autoUpdater = null;
 // Keep track of all windows
 let windows = [];
 
+// Track current open folder for dock menu
+let currentOpenFolder = null;
+
 // Window state management
 let windowState = {
   width: 1200,
@@ -271,6 +274,35 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// Update dock menu with current folder (macOS only)
+function updateDockMenu() {
+  if (process.platform !== 'darwin') return;
+
+  const dockMenuItems = [];
+
+  if (currentOpenFolder) {
+    const folderName = path.basename(currentOpenFolder);
+    dockMenuItems.push({
+      label: `📁 ${folderName}`,
+      enabled: false // Just a label, not clickable
+    });
+    dockMenuItems.push({
+      label: currentOpenFolder,
+      enabled: false,
+      sublabel: 'Current folder'
+    });
+    dockMenuItems.push({ type: 'separator' });
+  }
+
+  dockMenuItems.push({
+    label: 'New Window',
+    click: () => createWindow()
+  });
+
+  const dockMenu = Menu.buildFromTemplate(dockMenuItems);
+  app.dock.setMenu(dockMenu);
+}
+
 // IPC Handlers
 ipcMain.handle('read-file', async (event, filePath) => {
   try {
@@ -376,6 +408,13 @@ ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
 });
 
+// Update dock menu when folder is opened
+ipcMain.handle('set-open-folder', (event, folderPath) => {
+  currentOpenFolder = folderPath;
+  updateDockMenu();
+  return { success: true };
+});
+
 // File system watching
 const watchers = new Map();
 
@@ -441,6 +480,9 @@ app.whenReady().then(async () => {
   await loadWindowState();
   createMenu();
   createWindow();
+
+  // Initialize dock menu (macOS)
+  updateDockMenu();
 
   // Initialize auto-updater only in production (packaged app)
   if (app.isPackaged) {
