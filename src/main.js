@@ -84,8 +84,39 @@ function createWindow() {
     query: { isNewWindow: windows.length > 1 ? 'true' : '' }
   });
 
-  win.on('close', async () => {
+  win.on('close', async (e) => {
+    // Check with renderer if there are unsaved changes
+    e.preventDefault();
+    try {
+      const hasUnsaved = await win.webContents.executeJavaScript(
+        'window.app ? window.app.hasUnsavedChanges() : false'
+      );
+      if (hasUnsaved) {
+        const result = await dialog.showMessageBox(win, {
+          type: 'warning',
+          buttons: ['Save All', "Don't Save", 'Cancel'],
+          defaultId: 0,
+          cancelId: 2,
+          message: 'You have unsaved changes.',
+          detail: "Your changes will be lost if you don't save them."
+        });
+
+        if (result.response === 0) {
+          // Save all
+          await win.webContents.executeJavaScript(
+            'window.app ? window.app.saveAllFiles() : Promise.resolve()'
+          );
+        } else if (result.response === 2) {
+          // Cancel - don't close
+          return;
+        }
+        // response === 1 means "Don't Save" - close without saving
+      }
+    } catch (err) {
+      // If renderer is already destroyed, just close
+    }
     await saveWindowState(win);
+    win.destroy();
   });
 
   win.on('closed', () => {
@@ -347,6 +378,12 @@ ipcMain.handle('show-save-dialog', async (event) => {
   const result = await dialog.showSaveDialog(win, {
     filters: [{ name: 'All Files', extensions: ['*'] }]
   });
+  return result;
+});
+
+ipcMain.handle('show-message-box', async (event, options) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showMessageBox(win, options);
   return result;
 });
 

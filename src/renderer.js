@@ -389,18 +389,44 @@ class CodeLightApp {
         this.updateEmptyState();
     }
 
-    closeTab(id) {
+    async closeTab(id) {
         const index = this.tabs.findIndex(t => t.id === id);
         if (index === -1) return;
 
         const tab = this.tabs[index];
 
+        // Prompt to save if file has unsaved changes
+        if (tab.modified) {
+            const result = await window.electronAPI.showMessageBox({
+                type: 'warning',
+                buttons: ['Save', "Don't Save", 'Cancel'],
+                defaultId: 0,
+                cancelId: 2,
+                message: `Do you want to save the changes you made to ${tab.name}?`,
+                detail: "Your changes will be lost if you don't save them."
+            });
+
+            if (result.response === 0) {
+                // Save
+                const content = tab.model.getValue();
+                if (tab.path) {
+                    await window.electronAPI.writeFile(tab.path, content);
+                } else {
+                    const saveResult = await window.electronAPI.showSaveDialog();
+                    if (saveResult.canceled) return; // User cancelled, don't close
+                    await window.electronAPI.writeFile(saveResult.filePath, content);
+                }
+            } else if (result.response === 2) {
+                // Cancel - don't close the tab
+                return;
+            }
+            // response === 1 means "Don't Save" - just close without saving
+        }
+
         // If this tab is in split view, close split view first
         if (this.splitTabId === id) {
             this.closeSplitView();
         }
-
-        // TODO: Prompt to save if modified
 
         tab.model.dispose();
         this.tabs.splice(index, 1);
@@ -539,14 +565,18 @@ class CodeLightApp {
         setTimeout(() => document.addEventListener('click', closeMenu), 0);
     }
 
-    closeAllTabsExcept(tabId) {
+    async closeAllTabsExcept(tabId) {
         const tabsToClose = this.tabs.filter(t => t.id !== tabId);
-        tabsToClose.forEach(tab => this.closeTab(tab.id));
+        for (const tab of tabsToClose) {
+            await this.closeTab(tab.id);
+        }
     }
 
-    closeAllTabs() {
+    async closeAllTabs() {
         const tabsToClose = [...this.tabs];
-        tabsToClose.forEach(tab => this.closeTab(tab.id));
+        for (const tab of tabsToClose) {
+            await this.closeTab(tab.id);
+        }
     }
 
     // === Split View ===
@@ -699,6 +729,10 @@ class CodeLightApp {
             }
         }
         this.renderTabs();
+    }
+
+    hasUnsavedChanges() {
+        return this.tabs.some(t => t.modified);
     }
 
     // === Editor Settings ===

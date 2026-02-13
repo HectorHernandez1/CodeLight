@@ -8,6 +8,8 @@ export class FileManager {
         this.gitStatus = {}; // Track git file statuses
         this.isWatching = false;
         this.expandedFolders = new Set(); // Track expanded folder paths
+        this._isRendering = false; // Guard against re-renders while already rendering
+        this._pendingRefresh = false; // Track if a refresh was requested during render
         this.loadRecentFiles();
         this.setupFolderWatcher();
     }
@@ -24,23 +26,41 @@ export class FileManager {
     }
 
     async refreshFileTree() {
-        // Save expanded state before refresh
-        this.saveExpandedState();
-        // Refresh git status and re-render the tree
-        await this.refreshGitStatus();
-        await this.renderFileTree(this.app.openFolder);
-        // Note: expanded state is now restored during renderFileTree via createTreeItem
+        // If already rendering, schedule a refresh after current render completes
+        if (this._isRendering) {
+            this._pendingRefresh = true;
+            return;
+        }
+
+        this._isRendering = true;
+        try {
+            // Save expanded state before refresh
+            this.saveExpandedState();
+            // Refresh git status and re-render the tree
+            await this.refreshGitStatus();
+            await this.renderFileTree(this.app.openFolder);
+        } finally {
+            this._isRendering = false;
+            // If a refresh was requested while we were rendering, do it now
+            if (this._pendingRefresh) {
+                this._pendingRefresh = false;
+                this.refreshFileTree();
+            }
+        }
     }
 
     saveExpandedState() {
         // Capture current expanded folders from DOM before refresh
         const expandedElements = document.querySelectorAll('.tree-folder.expanded');
-        if (expandedElements.length > 0) {
-            this.expandedFolders.clear();
-            expandedElements.forEach(el => {
-                const path = el.querySelector('.tree-item')?.dataset.path;
-                if (path) this.expandedFolders.add(path);
-            });
+        const capturedPaths = new Set();
+        expandedElements.forEach(el => {
+            const path = el.querySelector('.tree-item')?.dataset.path;
+            if (path) capturedPaths.add(path);
+        });
+        // Only update if we found expanded folders in the DOM,
+        // otherwise keep the existing in-memory state (DOM may have been cleared)
+        if (capturedPaths.size > 0) {
+            this.expandedFolders = capturedPaths;
         }
     }
 
@@ -111,13 +131,12 @@ export class FileManager {
         const container = document.getElementById('file-tree');
         container.innerHTML = '';
 
-        // Create parent folder header at the top
-        const folderName = folderPath.split('/').pop();
+        // Create parent folder header at the top showing full path
         const headerItem = document.createElement('div');
         headerItem.className = 'tree-item tree-root-header';
         headerItem.innerHTML = `
             <span class="tree-item-icon">📂</span>
-            <span class="tree-item-name">${folderName}</span>
+            <span class="tree-item-name">${folderPath}</span>
         `;
 
         // Add right-click context menu for root folder
@@ -345,7 +364,20 @@ export class FileManager {
         const filePath = `${parentPath}/${fileName}`;
         const result = await window.electronAPI.writeFile(filePath, '');
         if (result.success) {
-            await this.renderFileTree(this.app.openFolder);
+            // Save expanded state before re-rendering so folders stay open
+            this.saveExpandedState();
+            // Also ensure the parent folder is expanded so the new file is visible
+            this.expandedFolders.add(parentPath);
+
+            this._isRendering = true;
+            try {
+                await this.refreshGitStatus();
+                await this.renderFileTree(this.app.openFolder);
+            } finally {
+                this._isRendering = false;
+                // Discard any pending refresh from file watcher since we just re-rendered
+                this._pendingRefresh = false;
+            }
             this.app.openFile(filePath);
         }
         return result;
