@@ -34,9 +34,9 @@ export class FileManager {
 
         this._isRendering = true;
         try {
-            // Save expanded state before refresh
-            this.saveExpandedState();
             // Refresh git status and re-render the tree
+            // (expandedFolders is maintained in-memory by click handlers,
+            //  no need to scrape DOM before re-render)
             await this.refreshGitStatus();
             await this.renderFileTree(this.app.openFolder);
         } finally {
@@ -49,20 +49,8 @@ export class FileManager {
         }
     }
 
-    saveExpandedState() {
-        // Capture current expanded folders from DOM before refresh
-        const expandedElements = document.querySelectorAll('.tree-folder.expanded');
-        const capturedPaths = new Set();
-        expandedElements.forEach(el => {
-            const path = el.querySelector('.tree-item')?.dataset.path;
-            if (path) capturedPaths.add(path);
-        });
-        // Only update if we found expanded folders in the DOM,
-        // otherwise keep the existing in-memory state (DOM may have been cleared)
-        if (capturedPaths.size > 0) {
-            this.expandedFolders = capturedPaths;
-        }
-    }
+    // expandedFolders is maintained in-memory by click handlers
+    // (add on expand, delete on collapse) — no DOM scraping needed
 
     async loadRecentFiles() {
         const recent = await this.app.storage.get('recentFiles');
@@ -364,9 +352,7 @@ export class FileManager {
         const filePath = `${parentPath}/${fileName}`;
         const result = await window.electronAPI.writeFile(filePath, '');
         if (result.success) {
-            // Save expanded state before re-rendering so folders stay open
-            this.saveExpandedState();
-            // Also ensure the parent folder is expanded so the new file is visible
+            // Ensure the parent folder is expanded so the new file is visible
             this.expandedFolders.add(parentPath);
 
             this._isRendering = true;
