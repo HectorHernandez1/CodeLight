@@ -17,6 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unwatchFolder: () => ipcRenderer.invoke('unwatch-folder'),
     onFolderChanged: (callback) => ipcRenderer.on('folder-changed', (event, data) => callback(data)),
 
+    // Window lifecycle
+    onCheckUnsaved: (callback) => ipcRenderer.on('check-unsaved-changes', (event, winId) => callback(winId)),
+    sendUnsavedResult: (winId, hasUnsaved) => ipcRenderer.send(`unsaved-check-${winId}`, hasUnsaved),
+    onSaveAllRequest: (callback) => ipcRenderer.on('save-all-files', (event, winId) => callback(winId)),
+    sendSaveAllDone: (winId) => ipcRenderer.send(`save-all-done-${winId}`),
+
     // Menu event listeners
     onNewFile: (callback) => ipcRenderer.on('menu-new-file', callback),
     onOpenFile: (callback) => ipcRenderer.on('menu-open-file', (event, path) => callback(path)),

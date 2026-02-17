@@ -236,6 +236,15 @@ class CodeLightApp {
         electronAPI.onToggleWordWrap(() => this.toggleWordWrap());
         electronAPI.onQuickOpen(() => this.showQuickOpen());
         electronAPI.onToggleSplit(() => this.toggleSplitView());
+
+        // Window close lifecycle: respond to unsaved check and save-all requests from main
+        electronAPI.onCheckUnsaved((winId) => {
+            electronAPI.sendUnsavedResult(winId, this.hasUnsavedChanges());
+        });
+        electronAPI.onSaveAllRequest(async (winId) => {
+            await this.saveAllFiles();
+            electronAPI.sendSaveAllDone(winId);
+        });
     }
 
     setupSidebarResize() {
@@ -397,35 +406,46 @@ class CodeLightApp {
 
         // Prompt to save if file has unsaved changes
         if (tab.modified) {
-            const result = await window.electronAPI.showMessageBox({
-                type: 'warning',
-                buttons: ['Save', "Don't Save", 'Cancel'],
-                defaultId: 0,
-                cancelId: 2,
-                message: `Do you want to save the changes you made to ${tab.name}?`,
-                detail: "Your changes will be lost if you don't save them."
-            });
+            try {
+                const result = await window.electronAPI.showMessageBox({
+                    type: 'warning',
+                    buttons: ['Save', "Don't Save", 'Cancel'],
+                    defaultId: 0,
+                    cancelId: 2,
+                    message: `Do you want to save the changes you made to ${tab.name}?`,
+                    detail: "Your changes will be lost if you don't save them."
+                });
 
-            if (result.response === 0) {
-                // Save
-                const content = tab.model.getValue();
-                if (tab.path) {
-                    await window.electronAPI.writeFile(tab.path, content);
-                } else {
-                    const saveResult = await window.electronAPI.showSaveDialog();
-                    if (saveResult.canceled) return; // User cancelled, don't close
-                    await window.electronAPI.writeFile(saveResult.filePath, content);
+                if (result.response === 0) {
+                    // Save
+                    const content = tab.model.getValue();
+                    if (tab.path) {
+                        await window.electronAPI.writeFile(tab.path, content);
+                    } else {
+                        const saveResult = await window.electronAPI.showSaveDialog();
+                        if (saveResult.canceled) return; // User cancelled, don't close
+                        await window.electronAPI.writeFile(saveResult.filePath, content);
+                    }
+                } else if (result.response === 2) {
+                    // Cancel - don't close the tab
+                    return;
                 }
-            } else if (result.response === 2) {
-                // Cancel - don't close the tab
-                return;
+                // response === 1 means "Don't Save" - just close without saving
+            } catch (err) {
+                console.error('Error in save dialog:', err);
+                return; // Don't close tab if dialog failed
             }
-            // response === 1 means "Don't Save" - just close without saving
         }
 
-        // If this tab is in split view, close split view first
+        // If this tab is in split view, detach the model from split editor before disposing
         if (this.splitTabId === id) {
+            this.splitEditor.setModel(null);
             this.closeSplitView();
+        }
+
+        // Detach from main editor too if this is the active tab
+        if (this.activeTabId === id) {
+            this.editor.setModel(null);
         }
 
         tab.model.dispose();
@@ -468,17 +488,28 @@ class CodeLightApp {
             const tabEl = document.createElement('div');
             const isSplit = this.isSplitView && tab.id === this.splitTabId;
             tabEl.className = `tab ${tab.id === this.activeTabId ? 'active' : ''} ${tab.modified ? 'modified' : ''} ${isSplit ? 'split' : ''}`;
-            tabEl.innerHTML = `
-        <span class="tab-name">${tab.name}</span>
-        ${isSplit ? '<span class="tab-split-indicator">⫿</span>' : ''}
-        <span class="tab-close">×</span>
-      `;
+            const tabNameEl = document.createElement('span');
+            tabNameEl.className = 'tab-name';
+            tabNameEl.textContent = tab.name;
+            tabEl.appendChild(tabNameEl);
 
-            tabEl.querySelector('.tab-name').addEventListener('click', () => {
+            if (isSplit) {
+                const splitIndicator = document.createElement('span');
+                splitIndicator.className = 'tab-split-indicator';
+                splitIndicator.textContent = '⫿';
+                tabEl.appendChild(splitIndicator);
+            }
+
+            const tabCloseEl = document.createElement('span');
+            tabCloseEl.className = 'tab-close';
+            tabCloseEl.textContent = '×';
+            tabEl.appendChild(tabCloseEl);
+
+            tabNameEl.addEventListener('click', () => {
                 this.activateTab(tab.id);
             });
 
-            tabEl.querySelector('.tab-close').addEventListener('click', (e) => {
+            tabCloseEl.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.closeTab(tab.id);
             });
@@ -685,6 +716,13 @@ class CodeLightApp {
             this.saveSession();
         } else {
             console.error('Failed to open file:', result.error);
+            // Show error to user
+            await window.electronAPI.showMessageBox({
+                type: 'error',
+                buttons: ['OK'],
+                message: 'Failed to open file',
+                detail: result.error || filePath
+            });
         }
     }
 
@@ -695,6 +733,7 @@ class CodeLightApp {
         if (!tab) return;
 
         const content = this.editor.getValue();
+        const isNewFile = !tab.path;
 
         if (!tab.path) {
             // New file - show save dialog
@@ -708,16 +747,26 @@ class CodeLightApp {
             monaco.editor.setModelLanguage(tab.model, newLang);
         }
 
+        // Suppress watcher so the write doesn't trigger a tree re-render
+        this.files.suppressWatcher();
         const writeResult = await window.electronAPI.writeFile(tab.path, content);
         if (writeResult.success) {
             tab.modified = false;
             tab.content = content;
             this.renderTabs();
             this.saveSession();
+
+            // If this was a new file saved into the open folder, refresh the tree
+            // so the file appears — but do it ourselves with state preserved
+            if (isNewFile && this.openFolder && tab.path.startsWith(this.openFolder)) {
+                await this.files.refreshFileTree();
+            }
         }
     }
 
     async saveAllFiles() {
+        // Suppress watcher so writes don't trigger tree re-renders
+        this.files.suppressWatcher();
         for (const tab of this.tabs) {
             if (tab.modified && tab.path) {
                 const content = tab.model.getValue();
@@ -740,18 +789,21 @@ class CodeLightApp {
     changeFontSize(delta) {
         this.fontSize = Math.max(8, Math.min(32, this.fontSize + delta));
         this.editor.updateOptions({ fontSize: this.fontSize });
+        if (this.splitEditor) this.splitEditor.updateOptions({ fontSize: this.fontSize });
         this.savePreferences();
     }
 
     resetFontSize() {
         this.fontSize = 13;
         this.editor.updateOptions({ fontSize: this.fontSize });
+        if (this.splitEditor) this.splitEditor.updateOptions({ fontSize: this.fontSize });
         this.savePreferences();
     }
 
     toggleWordWrap() {
         this.wordWrap = this.wordWrap === 'off' ? 'on' : 'off';
         this.editor.updateOptions({ wordWrap: this.wordWrap });
+        if (this.splitEditor) this.splitEditor.updateOptions({ wordWrap: this.wordWrap });
         this.savePreferences();
     }
 
@@ -886,30 +938,34 @@ class CodeLightApp {
         input.value = '';
         input.focus();
 
-        const handler = (e) => {
+        const closeModal = () => {
+            modal.classList.add('hidden');
+            input.removeEventListener('keydown', onKeydown);
+            modal.removeEventListener('click', onBackdropClick);
+            this.editor?.focus();
+        };
+
+        const onKeydown = (e) => {
             if (e.key === 'Enter') {
                 const line = parseInt(input.value);
-                if (!isNaN(line)) {
+                const model = this.editor?.getModel();
+                const maxLine = model ? model.getLineCount() : Infinity;
+                if (!isNaN(line) && line >= 1 && line <= maxLine) {
                     this.editor?.revealLineInCenter(line);
                     this.editor?.setPosition({ lineNumber: line, column: 1 });
-                    this.editor?.focus();
                 }
-                modal.classList.add('hidden');
-                input.removeEventListener('keydown', handler);
+                closeModal();
             } else if (e.key === 'Escape') {
-                modal.classList.add('hidden');
-                input.removeEventListener('keydown', handler);
-                this.editor?.focus();
+                closeModal();
             }
         };
 
-        input.addEventListener('keydown', handler);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.classList.add('hidden');
-                this.editor?.focus();
-            }
-        }, { once: true });
+        const onBackdropClick = (e) => {
+            if (e.target === modal) closeModal();
+        };
+
+        input.addEventListener('keydown', onKeydown);
+        modal.addEventListener('click', onBackdropClick);
     }
 
     showQuickOpen() {
@@ -921,17 +977,29 @@ class CodeLightApp {
 
         modal.classList.remove('hidden');
         input.value = '';
-        results.innerHTML = '';
+        while (results.firstChild) results.removeChild(results.firstChild);
         input.focus();
 
         let allFiles = [];
         let selectedIndex = 0;
+        let cancelled = false;
+
+        const closeModal = () => {
+            cancelled = true;
+            modal.classList.add('hidden');
+            input.removeEventListener('input', onInput);
+            input.removeEventListener('keydown', onKeydown);
+            modal.removeEventListener('click', onBackdropClick);
+            this.editor?.focus();
+        };
 
         // Collect all files recursively
-        const collectFiles = async (path, prefix = '') => {
-            const result = await window.electronAPI.readDirectory(path);
+        const collectFiles = async (dirPath, prefix = '') => {
+            if (cancelled) return;
+            const result = await window.electronAPI.readDirectory(dirPath);
             if (result.success) {
                 for (const item of result.items) {
+                    if (cancelled) return;
                     if (!item.isDirectory) {
                         allFiles.push({
                             name: item.name,
@@ -946,7 +1014,7 @@ class CodeLightApp {
         };
 
         collectFiles(this.openFolder).then(() => {
-            renderResults('');
+            if (!cancelled) renderResults('');
         });
 
         const renderResults = (query) => {
@@ -955,26 +1023,34 @@ class CodeLightApp {
                 : allFiles.slice(0, 20);
 
             selectedIndex = 0;
-            results.innerHTML = filtered.map((file, i) => `
-        <div class="quick-open-item ${i === 0 ? 'selected' : ''}" data-path="${file.path}">
-          <span>${file.name}</span>
-          <span class="quick-open-item-path">${file.display}</span>
-        </div>
-      `).join('');
+            while (results.firstChild) results.removeChild(results.firstChild);
 
-            results.querySelectorAll('.quick-open-item').forEach((item, i) => {
+            filtered.forEach((file, i) => {
+                const item = document.createElement('div');
+                item.className = `quick-open-item${i === 0 ? ' selected' : ''}`;
+                item.dataset.path = file.path;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = file.name;
+                item.appendChild(nameSpan);
+
+                const pathSpan = document.createElement('span');
+                pathSpan.className = 'quick-open-item-path';
+                pathSpan.textContent = file.display;
+                item.appendChild(pathSpan);
+
                 item.addEventListener('click', () => {
-                    this.openFile(item.dataset.path);
-                    modal.classList.add('hidden');
+                    this.openFile(file.path);
+                    closeModal();
                 });
+
+                results.appendChild(item);
             });
         };
 
-        input.addEventListener('input', (e) => {
-            renderResults(e.target.value);
-        });
+        const onInput = (e) => renderResults(e.target.value);
 
-        input.addEventListener('keydown', (e) => {
+        const onKeydown = (e) => {
             const items = results.querySelectorAll('.quick-open-item');
 
             if (e.key === 'ArrowDown') {
@@ -992,19 +1068,19 @@ class CodeLightApp {
                 if (selected) {
                     this.openFile(selected.dataset.path);
                 }
-                modal.classList.add('hidden');
+                closeModal();
             } else if (e.key === 'Escape') {
-                modal.classList.add('hidden');
-                this.editor?.focus();
+                closeModal();
             }
-        });
+        };
 
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.classList.add('hidden');
-                this.editor?.focus();
-            }
-        }, { once: true });
+        const onBackdropClick = (e) => {
+            if (e.target === modal) closeModal();
+        };
+
+        input.addEventListener('input', onInput);
+        input.addEventListener('keydown', onKeydown);
+        modal.addEventListener('click', onBackdropClick);
     }
 
     // === Session Management ===
@@ -1014,8 +1090,9 @@ class CodeLightApp {
             openFolder: this.openFolder,
             tabs: this.tabs.map(t => ({
                 path: t.path,
-                content: t.model.getValue(),
-                name: t.name
+                name: t.name,
+                // Only store content for unsaved files without a path (untitled)
+                content: !t.path ? t.model.getValue() : undefined
             })),
             activeTabPath: this.tabs.find(t => t.id === this.activeTabId)?.path
         };

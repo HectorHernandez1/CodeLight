@@ -2,6 +2,37 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 
+// Track the currently allowed folder per window (set when user opens a folder)
+const allowedFolders = new Map(); // senderId -> folderPath
+
+// Validate that a file path is within the allowed folder for this window.
+// Returns resolved path or null if invalid.
+function validatePath(senderId, filePath) {
+  const allowed = allowedFolders.get(senderId);
+  const resolved = path.resolve(filePath);
+  // If no folder is open, allow any path the user explicitly chose via dialog
+  if (!allowed) return resolved;
+  // Check resolved path is within the allowed folder
+  if (resolved === allowed || resolved.startsWith(allowed + path.sep)) {
+    return resolved;
+  }
+  return null;
+}
+
+// Looser validation: allow the path if it's within ANY open folder across windows,
+// OR if no folder restriction is set for this window (user opened file via dialog).
+function validateFileAccess(senderId, filePath) {
+  const resolved = path.resolve(filePath);
+  const allowed = allowedFolders.get(senderId);
+  // No folder open — user is opening individual files via dialog, allow it
+  if (!allowed) return resolved;
+  // Within the open folder
+  if (resolved === allowed || resolved.startsWith(allowed + path.sep)) {
+    return resolved;
+  }
+  return null;
+}
+
 // Auto-updater will be loaded lazily in production only
 let autoUpdater = null;
 
@@ -73,7 +104,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   });
 
@@ -85,12 +116,18 @@ function createWindow() {
   });
 
   win.on('close', async (e) => {
-    // Check with renderer if there are unsaved changes
     e.preventDefault();
     try {
-      const hasUnsaved = await win.webContents.executeJavaScript(
-        'window.app ? window.app.hasUnsavedChanges() : false'
-      );
+      // Ask renderer if there are unsaved changes via IPC (with timeout)
+      const hasUnsaved = await Promise.race([
+        new Promise((resolve) => {
+          const channel = `unsaved-check-${win.id}`;
+          ipcMain.once(channel, (_event, result) => resolve(result));
+          win.webContents.send('check-unsaved-changes', win.id);
+        }),
+        new Promise((resolve) => setTimeout(() => resolve(false), 2000))
+      ]);
+
       if (hasUnsaved) {
         const result = await dialog.showMessageBox(win, {
           type: 'warning',
@@ -102,20 +139,23 @@ function createWindow() {
         });
 
         if (result.response === 0) {
-          // Save all
-          await win.webContents.executeJavaScript(
-            'window.app ? window.app.saveAllFiles() : Promise.resolve()'
-          );
+          // Ask renderer to save all files via IPC
+          await Promise.race([
+            new Promise((resolve) => {
+              ipcMain.once(`save-all-done-${win.id}`, () => resolve());
+              win.webContents.send('save-all-files', win.id);
+            }),
+            new Promise((resolve) => setTimeout(resolve, 5000))
+          ]);
         } else if (result.response === 2) {
-          // Cancel - don't close
-          return;
+          return; // Cancel - don't close
         }
-        // response === 1 means "Don't Save" - close without saving
       }
     } catch (err) {
       // If renderer is already destroyed, just close
     }
     await saveWindowState(win);
+    allowedFolders.delete(win.webContents.id);
     win.destroy();
   });
 
@@ -337,7 +377,11 @@ function updateDockMenu() {
 // IPC Handlers
 ipcMain.handle('read-file', async (event, filePath) => {
   try {
-    const content = await fs.readFile(filePath, 'utf-8');
+    const resolved = validateFileAccess(event.sender.id, filePath);
+    if (!resolved) {
+      return { success: false, error: 'Access denied: path outside open folder' };
+    }
+    const content = await fs.readFile(resolved, 'utf-8');
     return { success: true, content };
   } catch (err) {
     return { success: false, error: err.message };
@@ -346,7 +390,11 @@ ipcMain.handle('read-file', async (event, filePath) => {
 
 ipcMain.handle('write-file', async (event, filePath, content) => {
   try {
-    await fs.writeFile(filePath, content, 'utf-8');
+    const resolved = validateFileAccess(event.sender.id, filePath);
+    if (!resolved) {
+      return { success: false, error: 'Access denied: path outside open folder' };
+    }
+    await fs.writeFile(resolved, content, 'utf-8');
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -355,10 +403,14 @@ ipcMain.handle('write-file', async (event, filePath, content) => {
 
 ipcMain.handle('read-directory', async (event, dirPath) => {
   try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const resolved = validateFileAccess(event.sender.id, dirPath);
+    if (!resolved) {
+      return { success: false, error: 'Access denied: path outside open folder' };
+    }
+    const entries = await fs.readdir(resolved, { withFileTypes: true });
     const items = entries.map(entry => ({
       name: entry.name,
-      path: path.join(dirPath, entry.name),
+      path: path.join(resolved, entry.name),
       isDirectory: entry.isDirectory()
     }));
     // Sort: directories first, then alphabetically
@@ -383,7 +435,16 @@ ipcMain.handle('show-save-dialog', async (event) => {
 
 ipcMain.handle('show-message-box', async (event, options) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const result = await dialog.showMessageBox(win, options);
+  // Whitelist allowed options to prevent abuse
+  const safeOptions = {
+    type: ['none', 'info', 'error', 'question', 'warning'].includes(options.type) ? options.type : 'info',
+    buttons: Array.isArray(options.buttons) ? options.buttons.map(String).slice(0, 5) : ['OK'],
+    defaultId: typeof options.defaultId === 'number' ? options.defaultId : 0,
+    cancelId: typeof options.cancelId === 'number' ? options.cancelId : -1,
+    message: typeof options.message === 'string' ? options.message.slice(0, 500) : '',
+    detail: typeof options.detail === 'string' ? options.detail.slice(0, 500) : undefined
+  };
+  const result = await dialog.showMessageBox(win, safeOptions);
   return result;
 });
 
@@ -448,27 +509,43 @@ ipcMain.handle('get-app-path', () => {
 // Update dock menu when folder is opened
 ipcMain.handle('set-open-folder', (event, folderPath) => {
   currentOpenFolder = folderPath;
+  // Track allowed folder for path validation
+  const resolved = path.resolve(folderPath);
+  allowedFolders.set(event.sender.id, resolved);
   updateDockMenu();
   return { success: true };
 });
 
 // File system watching
+// Stores { watcher, debounceTimer } per sender
 const watchers = new Map();
+
+function cleanupWatcher(senderId) {
+  if (watchers.has(senderId)) {
+    const entry = watchers.get(senderId);
+    if (entry.debounceTimer) clearTimeout(entry.debounceTimer);
+    entry.watcher.close();
+    watchers.delete(senderId);
+  }
+}
 
 ipcMain.handle('watch-folder', async (event, folderPath) => {
   try {
-    // Stop existing watcher for this window if any
     const senderId = event.sender.id;
-    if (watchers.has(senderId)) {
-      watchers.get(senderId).close();
+    // Stop existing watcher for this window if any
+    cleanupWatcher(senderId);
+
+    // Validate path
+    const resolved = validateFileAccess(senderId, folderPath);
+    if (!resolved) {
+      return { success: false, error: 'Access denied: path outside open folder' };
     }
 
     const { watch } = require('fs');
 
-    // Debounce mechanism to avoid rapid-fire events
-    let debounceTimer = null;
+    const entry = { watcher: null, debounceTimer: null };
 
-    const watcher = watch(folderPath, { recursive: true }, (eventType, filename) => {
+    const watcher = watch(resolved, { recursive: true }, (eventType, filename) => {
       // Skip hidden files and common ignored patterns
       if (filename && (
         filename.startsWith('.') ||
@@ -480,11 +557,11 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
       }
 
       // Debounce: wait 300ms after the last change before notifying
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      if (entry.debounceTimer) {
+        clearTimeout(entry.debounceTimer);
       }
 
-      debounceTimer = setTimeout(() => {
+      entry.debounceTimer = setTimeout(() => {
         // Send event to renderer
         if (!event.sender.isDestroyed()) {
           event.sender.send('folder-changed', { eventType, filename });
@@ -496,7 +573,8 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
       console.log('Watcher error:', err);
     });
 
-    watchers.set(senderId, watcher);
+    entry.watcher = watcher;
+    watchers.set(senderId, entry);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -504,11 +582,7 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
 });
 
 ipcMain.handle('unwatch-folder', async (event) => {
-  const senderId = event.sender.id;
-  if (watchers.has(senderId)) {
-    watchers.get(senderId).close();
-    watchers.delete(senderId);
-  }
+  cleanupWatcher(event.sender.id);
   return { success: true };
 });
 

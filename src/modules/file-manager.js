@@ -10,14 +10,21 @@ export class FileManager {
         this.expandedFolders = new Set(); // Track expanded folder paths
         this._isRendering = false; // Guard against re-renders while already rendering
         this._pendingRefresh = false; // Track if a refresh was requested during render
+        this._suppressWatcher = false; // Suppress watcher refreshes during saves
         this.loadRecentFiles();
         this.setupFolderWatcher();
     }
 
     setupFolderWatcher() {
+        // Remove any previous listener to prevent accumulation
+        window.electronAPI.removeAllListeners('folder-changed');
+
         // Listen for folder change events from the main process
         window.electronAPI.onFolderChanged((data) => {
-            console.log('Folder changed:', data);
+            // Skip refresh if we're the ones who caused the change (e.g., saving a file)
+            if (this._suppressWatcher) {
+                return;
+            }
             // Refresh the file tree when changes are detected
             if (this.app.openFolder) {
                 this.refreshFileTree();
@@ -51,6 +58,16 @@ export class FileManager {
 
     // expandedFolders is maintained in-memory by click handlers
     // (add on expand, delete on collapse) — no DOM scraping needed
+
+    // Suppress watcher refreshes while we perform our own writes.
+    // The 500ms timeout covers the 300ms watcher debounce plus margin.
+    suppressWatcher() {
+        this._suppressWatcher = true;
+        clearTimeout(this._suppressTimer);
+        this._suppressTimer = setTimeout(() => {
+            this._suppressWatcher = false;
+        }, 500);
+    }
 
     async loadRecentFiles() {
         const recent = await this.app.storage.get('recentFiles');
@@ -102,8 +119,15 @@ export class FileManager {
             return !tab.path || !tab.path.startsWith(folderPath);
         });
         tabsToClose.forEach(tab => this.app.closeTab(tab.id));
-        await this.refreshGitStatus();
-        await this.renderFileTree(folderPath);
+
+        this._isRendering = true;
+        try {
+            await this.refreshGitStatus();
+            await this.renderFileTree(folderPath);
+        } finally {
+            this._isRendering = false;
+            this._pendingRefresh = false;
+        }
         this.app.saveSession();
         this.app.updateStatusBar();
 
@@ -122,10 +146,14 @@ export class FileManager {
         // Create parent folder header at the top showing full path
         const headerItem = document.createElement('div');
         headerItem.className = 'tree-item tree-root-header';
-        headerItem.innerHTML = `
-            <span class="tree-item-icon">📂</span>
-            <span class="tree-item-name">${folderPath}</span>
-        `;
+        const headerIcon = document.createElement('span');
+        headerIcon.className = 'tree-item-icon';
+        headerIcon.textContent = '📂';
+        const headerName = document.createElement('span');
+        headerName.className = 'tree-item-name';
+        headerName.textContent = folderPath;
+        headerItem.appendChild(headerIcon);
+        headerItem.appendChild(headerName);
 
         // Add right-click context menu for root folder
         headerItem.addEventListener('contextmenu', (e) => {
@@ -350,6 +378,7 @@ export class FileManager {
 
     async createFile(parentPath, fileName) {
         const filePath = `${parentPath}/${fileName}`;
+        this.suppressWatcher();
         const result = await window.electronAPI.writeFile(filePath, '');
         if (result.success) {
             // Ensure the parent folder is expanded so the new file is visible
