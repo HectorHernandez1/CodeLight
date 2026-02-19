@@ -216,11 +216,24 @@ export class FileManager {
         nameSpan.className = 'tree-item-name';
         nameSpan.textContent = name;
 
+        // Add right-click context menu for copying path
+        item.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showContextMenu(e.clientX, e.clientY, itemPath, isDirectory);
+        });
+
         if (isDirectory) {
             // Check if this folder should be expanded (was previously expanded or is root)
             const shouldExpand = isRoot || this.expandedFolders.has(itemPath);
 
             icon.textContent = shouldExpand ? '📂' : '📁';
+
+            // Assemble item and append to wrapper FIRST so the folder label
+            // always appears above its children in the DOM
+            item.appendChild(icon);
+            item.appendChild(nameSpan);
+            wrapper.appendChild(item);
 
             item.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -274,9 +287,14 @@ export class FileManager {
                 }
                 wrapper.appendChild(childrenContainer);
             }
+
+            return wrapper;
         } else {
             // File
             icon.textContent = this.getFileIcon(name);
+
+            item.appendChild(icon);
+            item.appendChild(nameSpan);
 
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -288,22 +306,7 @@ export class FileManager {
                 });
                 item.classList.add('active');
             });
-        }
 
-        // Add right-click context menu for copying path
-        item.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showContextMenu(e.clientX, e.clientY, itemPath, isDirectory);
-        });
-
-        item.appendChild(icon);
-        item.appendChild(nameSpan);
-
-        if (isDirectory) {
-            wrapper.appendChild(item);
-            return wrapper;
-        } else {
             return item;
         }
     }
