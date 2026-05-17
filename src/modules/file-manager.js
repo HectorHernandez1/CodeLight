@@ -170,7 +170,9 @@ export class FileManager {
         const result = await window.electronAPI.readDirectory(folderPath);
         if (result.success) {
             for (const child of result.items) {
-                const childItem = await this.createTreeItem(child.path, child.isDirectory);
+                // Top-level entries (direct children of the opened folder) are shown
+                // even if they're dotfiles — most editors surface .gitignore, .env, etc.
+                const childItem = await this.createTreeItem(child.path, child.isDirectory, false, true);
                 if (childItem) {
                     childrenContainer.appendChild(childItem);
                 }
@@ -179,11 +181,16 @@ export class FileManager {
         container.appendChild(childrenContainer);
     }
 
-    async createTreeItem(itemPath, isDirectory, isRoot = false) {
-        const name = itemPath.split('/').pop();
+    basename(p) {
+        const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+        return i === -1 ? p : p.slice(i + 1);
+    }
+
+    async createTreeItem(itemPath, isDirectory, isRoot = false, isTopLevel = false) {
+        const name = this.basename(itemPath);
 
         // Skip hidden files and common ignored directories
-        if (!isRoot && name.startsWith('.')) {
+        if (!isRoot && !isTopLevel && name.startsWith('.')) {
             return null;
         }
         if (name === 'node_modules' || name === '__pycache__' || name === '.git') {
@@ -336,8 +343,7 @@ export class FileManager {
         copyNameItem.className = 'context-menu-item';
         copyNameItem.textContent = 'Copy Name';
         copyNameItem.addEventListener('click', () => {
-            const name = itemPath.split('/').pop();
-            navigator.clipboard.writeText(name);
+            navigator.clipboard.writeText(this.basename(itemPath));
             menu.remove();
         });
 
@@ -380,7 +386,8 @@ export class FileManager {
     }
 
     async createFile(parentPath, fileName) {
-        const filePath = `${parentPath}/${fileName}`;
+        const sep = parentPath.includes('\\') && !parentPath.includes('/') ? '\\' : '/';
+        const filePath = parentPath.endsWith(sep) ? `${parentPath}${fileName}` : `${parentPath}${sep}${fileName}`;
         this.suppressWatcher();
         const result = await window.electronAPI.writeFile(filePath, '');
         if (result.success) {

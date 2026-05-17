@@ -122,14 +122,19 @@ function createWindow() {
     e.preventDefault();
     try {
       // Ask renderer if there are unsaved changes via IPC (with timeout)
-      const hasUnsaved = await Promise.race([
-        new Promise((resolve) => {
-          const channel = `unsaved-check-${win.id}`;
-          ipcMain.once(channel, (_event, result) => resolve(result));
-          win.webContents.send('check-unsaved-changes', win.id);
-        }),
-        new Promise((resolve) => setTimeout(() => resolve(false), 2000))
-      ]);
+      const unsavedChannel = `unsaved-check-${win.id}`;
+      const hasUnsaved = await new Promise((resolve) => {
+        const handler = (_event, result) => {
+          clearTimeout(timer);
+          resolve(result);
+        };
+        const timer = setTimeout(() => {
+          ipcMain.removeListener(unsavedChannel, handler);
+          resolve(false);
+        }, 2000);
+        ipcMain.once(unsavedChannel, handler);
+        win.webContents.send('check-unsaved-changes', win.id);
+      });
 
       if (hasUnsaved) {
         const result = await dialog.showMessageBox(win, {
@@ -143,22 +148,35 @@ function createWindow() {
 
         if (result.response === 0) {
           // Ask renderer to save all files via IPC
-          await Promise.race([
-            new Promise((resolve) => {
-              ipcMain.once(`save-all-done-${win.id}`, () => resolve());
-              win.webContents.send('save-all-files', win.id);
-            }),
-            new Promise((resolve) => setTimeout(resolve, 5000))
-          ]);
+          const saveChannel = `save-all-done-${win.id}`;
+          await new Promise((resolve) => {
+            const handler = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            const timer = setTimeout(() => {
+              ipcMain.removeListener(saveChannel, handler);
+              resolve();
+            }, 5000);
+            ipcMain.once(saveChannel, handler);
+            win.webContents.send('save-all-files', win.id);
+          });
         } else if (result.response === 2) {
-          return; // Cancel - don't close
+          // Cancel - abort the close AND any in-progress quit so the app stays alive
+          isQuitting = false;
+          return;
         }
       }
     } catch (err) {
       // If renderer is already destroyed, just close
     }
-    await saveWindowState(win);
+    try {
+      await saveWindowState(win);
+    } catch (err) {
+      // Failing to persist window state shouldn't block the window from closing
+    }
     allowedFolders.delete(win.webContents.id);
+    cleanupWatcher(win.webContents.id);
     win.destroy();
   });
 
@@ -453,9 +471,13 @@ ipcMain.handle('show-message-box', async (event, options) => {
 
 ipcMain.handle('get-git-status', async (event, folderPath) => {
   try {
-    const { exec } = require('child_process');
+    const resolvedFolder = validateFileAccess(event.sender.id, folderPath);
+    if (!resolvedFolder) {
+      return { success: false, error: 'Access denied: path outside open folder' };
+    }
+    const { execFile } = require('child_process');
     return new Promise((resolve) => {
-      exec('git status --porcelain', { cwd: folderPath }, (error, stdout, stderr) => {
+      execFile('git', ['status', '--porcelain'], { cwd: resolvedFolder }, (error, stdout, stderr) => {
         if (error) {
           // Not a git repo or git not installed
           resolve({ success: false, error: error.message });
@@ -467,9 +489,14 @@ ipcMain.handle('get-git-status', async (event, folderPath) => {
 
         for (const line of lines) {
           const code = line.substring(0, 2);
+          // Rename entries look like "R  old -> new" — we want the new path.
+          let rawPath = line.substring(3);
+          if (code.includes('R') && rawPath.includes(' -> ')) {
+            rawPath = rawPath.split(' -> ').pop();
+          }
           // Handle paths that may have quotes or spaces
-          let filePath = line.substring(3).replace(/^"/, '').replace(/"$/, '');
-          const fullPath = path.normalize(path.join(folderPath, filePath));
+          let filePath = rawPath.replace(/^"/, '').replace(/"$/, '');
+          const fullPath = path.normalize(path.join(resolvedFolder, filePath));
 
           // Parse git status codes
           let fileStatus;
@@ -489,7 +516,7 @@ ipcMain.handle('get-git-status', async (event, folderPath) => {
 
           // Also mark all parent directories
           let parentPath = path.dirname(fullPath);
-          while (parentPath !== folderPath && parentPath.startsWith(folderPath)) {
+          while (parentPath !== resolvedFolder && parentPath.startsWith(resolvedFolder + path.sep)) {
             if (!status[parentPath]) {
               status[parentPath] = 'modified'; // Folders with changes show as modified
             }
