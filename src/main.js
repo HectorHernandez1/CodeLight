@@ -39,6 +39,9 @@ let autoUpdater = null;
 // Keep track of all windows
 let windows = [];
 
+// Track whether a quit was requested so we can re-trigger it after async close handling
+let isQuitting = false;
+
 // Track current open folder for dock menu
 let currentOpenFolder = null;
 
@@ -652,8 +655,12 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' || isQuitting) {
     app.quit();
   }
 });
