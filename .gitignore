@@ -46,3 +46,6 @@ coverage/
 # Cache
 .npm
 .eslintcache
+
+# Auto-generated claude-mem activity stubs (real instructions live in /CLAUDE.md)
+src/**/CLAUDE.md
