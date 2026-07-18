@@ -542,6 +542,21 @@ ipcMain.handle('set-open-folder', (event, folderPath) => {
   // Track allowed folder for path validation
   const resolved = path.resolve(folderPath);
   allowedFolders.set(event.sender.id, resolved);
+
+  // Title each window after its folder (with parent dir) so the Dock's
+  // window list can tell same-named checkouts apart
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) {
+    const parentName = path.basename(path.dirname(resolved));
+    const label = parentName
+      ? `${parentName}/${path.basename(resolved)}`
+      : path.basename(resolved);
+    win.setTitle(`${label} — CodeLight`);
+    if (process.platform === 'darwin') {
+      win.setRepresentedFilename(resolved);
+    }
+  }
+
   updateDockMenu();
   return { success: true };
 });
