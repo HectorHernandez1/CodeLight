@@ -186,34 +186,9 @@ class CodeLightApp {
                         }
                     });
 
-                    // Create split editor (initially hidden)
-                    this.splitEditor = monaco.editor.create(document.getElementById('editor-container-split'), {
-                        value: '',
-                        language: 'plaintext',
-                        theme: document.body.classList.contains('light-theme') ? 'codelight-light' : 'codelight-dark',
-                        fontSize: this.fontSize,
-                        fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
-                        lineNumbers: 'on',
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        wordWrap: this.wordWrap,
-                        automaticLayout: true,
-                        folding: true,
-                        renderWhitespace: 'selection',
-                        tabSize: 2,
-                        insertSpaces: true,
-                        cursorBlinking: 'smooth',
-                        cursorSmoothCaretAnimation: 'on',
-                        smoothScrolling: true,
-                        padding: { top: 10 }
-                    });
-
-                    // Track content changes in split editor
-                    this.splitEditor.onDidChangeModelContent(() => {
-                        if (this.splitTabId) {
-                            this.markTabModified(this.splitTabId);
-                        }
-                    });
+                    // Split editor is created lazily on first use (see
+                    // ensureSplitEditor) — a second Monaco instance at startup
+                    // costs time and memory for a pane that starts hidden
 
                     // Handle window resize
                     window.addEventListener('resize', () => {
@@ -625,9 +600,41 @@ class CodeLightApp {
 
     // === Split View ===
 
+    ensureSplitEditor() {
+        if (this.splitEditor) return;
+        this.splitEditor = monaco.editor.create(document.getElementById('editor-container-split'), {
+            value: '',
+            language: 'plaintext',
+            theme: document.body.classList.contains('light-theme') ? 'codelight-light' : 'codelight-dark',
+            fontSize: this.fontSize,
+            fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+            lineNumbers: 'on',
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: this.wordWrap,
+            automaticLayout: true,
+            folding: true,
+            renderWhitespace: 'selection',
+            tabSize: 2,
+            insertSpaces: true,
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            smoothScrolling: true,
+            padding: { top: 10 }
+        });
+
+        this.splitEditor.onDidChangeModelContent(() => {
+            if (this.splitTabId) {
+                this.markTabModified(this.splitTabId);
+            }
+        });
+    }
+
     openInSplitView(tabId) {
         const tab = this.tabs.find(t => t.id === tabId);
         if (!tab) return;
+
+        this.ensureSplitEditor();
 
         // Save current split editor state if there was one
         if (this.splitTabId) {

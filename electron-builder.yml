@@ -28,6 +28,13 @@ files:
   - node_modules/**/*
   - "!node_modules/*/{CHANGELOG.md,README.md,readme.md,test,__tests__,tests,*.ts}"
   - "!**/CLAUDE.md"
+  # Monaco ships four builds; the app only loads min/ (see MONACO_PATH)
+  - "!node_modules/monaco-editor/{esm,dev,min-maps}/**"
+  # macOS-only app: strip other platforms' node-pty binaries
+  - "!node_modules/node-pty/prebuilds/{win32-x64,win32-arm64,linux-x64,linux-arm64}/**"
+  # Source maps are dev-only
+  - "!**/*.js.map"
+  - "!**/*.mjs.map"
 
 directories:
   output: dist

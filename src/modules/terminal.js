@@ -1,9 +1,7 @@
 // Terminal Module
 // xterm.js UI in the renderer; the real shell (node-pty) lives in the main
 // process and is reached over IPC, so the renderer stays sandboxed.
-
-import { Terminal } from '../../node_modules/@xterm/xterm/lib/xterm.mjs';
-import { FitAddon } from '../../node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
+// xterm is imported lazily on first open so it costs nothing at startup.
 
 // VS Code Dark Modern terminal palette
 const DARK_THEME = {
@@ -99,6 +97,10 @@ export class TerminalManager {
         this.panel.style.height = `${this.panelHeight}px`;
 
         if (!this.term) {
+            const [{ Terminal }, { FitAddon }] = await Promise.all([
+                import('../../node_modules/@xterm/xterm/lib/xterm.mjs'),
+                import('../../node_modules/@xterm/addon-fit/lib/addon-fit.mjs')
+            ]);
             this.term = new Terminal({
                 fontFamily: 'Monaco, Menlo, monospace',
                 fontSize: 12,
