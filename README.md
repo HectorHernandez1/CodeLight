@@ -10,6 +10,7 @@ A lightweight, minimalist code editor for macOS.
 - 🗂️ **Multiple Tabs** - Work on multiple files simultaneously
 - ⌨️ **Keyboard Shortcuts** - Sublime-compatible shortcuts
 - 🔍 **Find & Replace** - Quick search with regex support
+- 💻 **Integrated Terminal** - Toggle a real shell with Ctrl+`
 - 💨 **Fast Startup** - Launches in under 2 seconds
 - 🔒 **Local-First** - Your files stay on your machine
 
@@ -51,6 +52,7 @@ npm run build
 | Go to Line | ⌃G |
 | Quick Open | ⌘P |
 | Toggle Sidebar | ⌘B |
+| Toggle Terminal | ⌃` |
 | Increase Font | ⌘+ |
 | Decrease Font | ⌘- |
 | Toggle Word Wrap | ⌘⌥W |

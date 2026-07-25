@@ -28,5 +28,5 @@ Ordered roadmap — work top to bottom. (Created 2026-07-19; bugs found while us
 
 ## 5. Integrated terminal window — *largest feature, deliberately last*
 
-- [ ] Toggleable terminal panel in the editor: xterm.js in the renderer + node-pty in the main process over IPC (keeps the renderer sandboxed).
+- [x] Toggleable terminal panel in the editor: xterm.js in the renderer + node-pty in the main process over IPC (keeps the renderer sandboxed). *(Done 2026-07-25, pulled ahead of #4 since #2 unblocked it. Ctrl+` toggles, drag-resizable panel, one shell per window, cwd follows the open folder. node-pty 1.1.0 ships darwin x64+arm64 prebuilds so the universal build needed no cross-compiling. Gotcha: npm strips the exec bit from node-pty's spawn-helper → "posix_spawnp failed"; a postinstall chmod in package.json guards this.)*
 - Last because: node-pty is a native module that needs dual-arch prebuilds (wants #2 done first) and adds meaningful surface area — best built once the release pipeline (universal + signed) is stable.

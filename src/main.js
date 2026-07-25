@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const os = require('os');
 
 // Track the currently allowed folder per window (set when user opens a folder)
 const allowedFolders = new Map(); // senderId -> folderPath
@@ -177,6 +178,7 @@ function createWindow() {
     }
     allowedFolders.delete(win.webContents.id);
     cleanupWatcher(win.webContents.id);
+    cleanupTerminal(win.webContents.id);
     win.destroy();
   });
 
@@ -336,6 +338,12 @@ function createMenu() {
           label: 'Toggle Split View',
           accelerator: 'CmdOrCtrl+\\',
           click: () => getFocusedWindow()?.webContents.send('menu-toggle-split')
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Terminal',
+          accelerator: 'Ctrl+`',
+          click: () => getFocusedWindow()?.webContents.send('menu-toggle-terminal')
         },
         { type: 'separator' },
         { role: 'toggleDevTools' }
@@ -628,6 +636,81 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
 
 ipcMain.handle('unwatch-folder', async (event) => {
   cleanupWatcher(event.sender.id);
+  return { success: true };
+});
+
+// Integrated terminal
+// node-pty is loaded lazily so a broken native build can't prevent app startup
+let nodePty = null;
+const terminals = new Map(); // senderId -> pty process
+
+function cleanupTerminal(senderId) {
+  const term = terminals.get(senderId);
+  if (term) {
+    try { term.kill(); } catch (err) { /* already dead */ }
+    terminals.delete(senderId);
+  }
+}
+
+ipcMain.handle('terminal-create', (event, opts) => {
+  try {
+    if (!nodePty) {
+      nodePty = require('node-pty');
+    }
+    const senderId = event.sender.id;
+    cleanupTerminal(senderId);
+
+    const shell = process.env.SHELL || '/bin/zsh';
+    const cwd = allowedFolders.get(senderId) || os.homedir();
+    const term = nodePty.spawn(shell, ['-l'], {
+      name: 'xterm-256color',
+      cols: (opts && opts.cols) || 80,
+      rows: (opts && opts.rows) || 24,
+      cwd,
+      env: process.env
+    });
+
+    term.onData((data) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('terminal-data', data);
+      }
+    });
+
+    term.onExit(({ exitCode }) => {
+      terminals.delete(senderId);
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('terminal-exit', exitCode);
+      }
+    });
+
+    terminals.set(senderId, term);
+    return { success: true, shellName: path.basename(shell) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Fire-and-forget for keystroke latency
+ipcMain.on('terminal-input', (event, data) => {
+  if (typeof data !== 'string') return;
+  const term = terminals.get(event.sender.id);
+  if (term) term.write(data);
+});
+
+ipcMain.handle('terminal-resize', (event, cols, rows) => {
+  try {
+    const term = terminals.get(event.sender.id);
+    if (term && Number.isInteger(cols) && Number.isInteger(rows) && cols > 0 && rows > 0) {
+      term.resize(cols, rows);
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('terminal-kill', (event) => {
+  cleanupTerminal(event.sender.id);
   return { success: true };
 });
 

@@ -7,6 +7,7 @@
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' blob:;">
   <title>CodeLight</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -38,6 +39,29 @@
         <div id="editor-container" class="editor-pane"></div>
         <div id="split-resize-handle" class="hidden"></div>
         <div id="editor-container-split" class="editor-pane hidden"></div>
+      </div>
+
+      <!-- Integrated terminal panel -->
+      <div id="terminal-resize-handle" class="hidden"></div>
+      <div id="terminal-panel" class="hidden">
+        <div id="terminal-header">
+          <div class="terminal-tabs">
+            <span class="terminal-tab active">TERMINAL</span>
+          </div>
+          <div class="terminal-actions">
+            <span id="terminal-shell-label"></span>
+            <button id="terminal-kill" title="Kill terminal">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 5h10M6.5 5V3.5h3V5M5 5l.7 8.5h4.6L11 5M6.8 7.5v3.5M9.2 7.5v3.5"/></svg>
+            </button>
+            <button id="terminal-maximize" title="Maximize panel size">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10l5-5 5 5"/></svg>
+            </button>
+            <button id="terminal-close" title="Hide panel (process keeps running)">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="terminal-container"></div>
       </div>
 
       <!-- Status bar -->

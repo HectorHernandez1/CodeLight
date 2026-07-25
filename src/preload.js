@@ -17,6 +17,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unwatchFolder: () => ipcRenderer.invoke('unwatch-folder'),
     onFolderChanged: (callback) => ipcRenderer.on('folder-changed', (event, data) => callback(data)),
 
+    // Integrated terminal
+    terminalCreate: (opts) => ipcRenderer.invoke('terminal-create', opts),
+    terminalInput: (data) => ipcRenderer.send('terminal-input', data),
+    terminalResize: (cols, rows) => ipcRenderer.invoke('terminal-resize', cols, rows),
+    terminalKill: () => ipcRenderer.invoke('terminal-kill'),
+    onTerminalData: (callback) => ipcRenderer.on('terminal-data', (event, data) => callback(data)),
+    onTerminalExit: (callback) => ipcRenderer.on('terminal-exit', (event, code) => callback(code)),
+    onToggleTerminal: (callback) => ipcRenderer.on('menu-toggle-terminal', callback),
+
     // Window lifecycle
     onCheckUnsaved: (callback) => ipcRenderer.on('check-unsaved-changes', (event, winId) => callback(winId)),
     sendUnsavedResult: (winId, hasUnsaved) => ipcRenderer.send(`unsaved-check-${winId}`, hasUnsaved),

@@ -28,6 +28,9 @@ export class ThemeManager {
             monaco.editor.setTheme(theme === 'light' ? 'codelight-light' : 'codelight-dark');
         }
 
+        // Update terminal colors to match
+        this.app.terminal?.applyTheme();
+
         if (save) {
             this.app.storage.set('theme', theme);
             this.app.savePreferences();
