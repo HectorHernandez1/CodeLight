@@ -89,6 +89,29 @@ npm test
 - [Electron](https://electronjs.org/) - Cross-platform desktop framework
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/) - VS Code's editor engine
 
+## Troubleshooting
+
+CodeLight writes a diagnostic log to:
+
+```
+~/Library/Application Support/CodeLight/codelight.log
+```
+
+It records app startup (version, architecture), every folder open, failed
+directory reads (with the OS error), file watcher and terminal failures, and
+renderer crashes. If a folder fails to open, the file tree also shows the
+error in red instead of staying empty.
+
+View the log with:
+
+```bash
+tail -50 ~/Library/Application\ Support/CodeLight/codelight.log
+```
+
+If a folder under Desktop, Documents, or Downloads won't open and the log
+shows "Operation not permitted", grant access in System Settings → Privacy &
+Security → Files and Folders → CodeLight.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.

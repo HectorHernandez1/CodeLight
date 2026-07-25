@@ -71,6 +71,16 @@ npm run build
 | Memory baseline | < 350MB |
 | App size | < 200MB |
 
+## Logging
+
+The main process logs to `app.getPath('userData')/codelight.log` (on macOS:
+`~/Library/Application Support/CodeLight/codelight.log`) via `logToFile()` in
+`src/main.js`. It captures startup info, folder opens, read-directory/watcher/
+terminal failures, uncaught exceptions, and renderer errors (sent over the
+`renderer-log` IPC channel via `electronAPI.logEvent(level, message)`). When
+adding failure paths, log them — silent failures are how the "folder won't
+open" class of bug hides.
+
 ## Monaco Editor Notes
 
 - Use latest stable version
