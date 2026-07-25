@@ -179,6 +179,13 @@ export class FileManager {
                     childrenContainer.appendChild(childItem);
                 }
             }
+        } else {
+            // Surface the failure instead of leaving an empty tree
+            window.electronAPI.logEvent('error', `open folder failed: ${folderPath}: ${result.error}`);
+            const errorItem = document.createElement('div');
+            errorItem.className = 'tree-error';
+            errorItem.textContent = `Cannot read folder: ${result.error}`;
+            childrenContainer.appendChild(errorItem);
         }
         container.appendChild(childrenContainer);
     }

@@ -1,7 +1,32 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const os = require('os');
+
+// File logger: ~/Library/Application Support/CodeLight/codelight.log
+// Lazy so it never touches userData before app is ready
+let logStream = null;
+function logToFile(level, message) {
+  try {
+    if (!logStream) {
+      if (!app.isReady()) return;
+      const dir = app.getPath('userData');
+      fsSync.mkdirSync(dir, { recursive: true });
+      logStream = fsSync.createWriteStream(path.join(dir, 'codelight.log'), { flags: 'a' });
+    }
+    logStream.write(`${new Date().toISOString()} [${level}] ${message}\n`);
+  } catch (err) {
+    // Logging must never break the app
+  }
+}
+
+process.on('uncaughtException', (err) => {
+  logToFile('fatal', `uncaughtException: ${err.stack || err.message}`);
+});
+process.on('unhandledRejection', (reason) => {
+  logToFile('error', `unhandledRejection: ${reason?.stack || reason}`);
+});
 
 // Track the currently allowed folder per window (set when user opens a folder)
 const allowedFolders = new Map(); // senderId -> folderPath
@@ -439,6 +464,7 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
   try {
     const resolved = validateFileAccess(event.sender.id, dirPath);
     if (!resolved) {
+      logToFile('warn', `read-directory denied (outside open folder): ${dirPath}`);
       return { success: false, error: 'Access denied: path outside open folder' };
     }
     const entries = await fs.readdir(resolved, { withFileTypes: true });
@@ -455,6 +481,7 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
     });
     return { success: true, items };
   } catch (err) {
+    logToFile('error', `read-directory failed: ${dirPath}: ${err.code || ''} ${err.message}`);
     return { success: false, error: err.message };
   }
 });
@@ -553,8 +580,15 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+// Renderer-side events funneled into the same log file
+ipcMain.on('renderer-log', (event, level, message) => {
+  const safeLevel = ['info', 'warn', 'error'].includes(level) ? level : 'info';
+  logToFile(`renderer:${safeLevel}`, String(message).slice(0, 1000));
+});
+
 // Update dock menu when folder is opened
 ipcMain.handle('set-open-folder', (event, folderPath) => {
+  logToFile('info', `open folder: ${folderPath}`);
   currentOpenFolder = folderPath;
   // Track allowed folder for path validation
   const resolved = path.resolve(folderPath);
@@ -632,7 +666,7 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
     });
 
     watcher.on('error', (err) => {
-      console.log('Watcher error:', err);
+      logToFile('error', `watcher error: ${err.message}`);
     });
 
     entry.watcher = watcher;
@@ -777,6 +811,7 @@ ipcMain.handle('terminal-create', (event, opts) => {
     terminals.set(senderId, term);
     return { success: true, shellName: path.basename(shell) };
   } catch (err) {
+    logToFile('error', `terminal-create failed: ${err.message}`);
     return { success: false, error: err.message };
   }
 });
@@ -807,6 +842,7 @@ ipcMain.handle('terminal-kill', (event) => {
 
 // App lifecycle
 app.whenReady().then(async () => {
+  logToFile('info', `CodeLight ${app.getVersion()} started (packaged=${app.isPackaged}, arch=${process.arch}, platform=${process.platform})`);
   await loadWindowState();
   createMenu();
   createWindow();

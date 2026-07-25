@@ -1221,6 +1221,14 @@ class CodeLightApp {
     }
 }
 
+// Funnel renderer crashes into the main-process log file
+window.addEventListener('error', (e) => {
+    window.electronAPI?.logEvent('error', `${e.message} @ ${e.filename}:${e.lineno}`);
+});
+window.addEventListener('unhandledrejection', (e) => {
+    window.electronAPI?.logEvent('error', `unhandledrejection: ${e.reason?.stack || e.reason}`);
+});
+
 // Initialize the app
 window.addEventListener('DOMContentLoaded', () => {
     window.app = new CodeLightApp();

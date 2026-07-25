@@ -281,6 +281,14 @@ body.light-theme .search-match .match-highlight {
   background-color: #F8C9AB;
 }
 
+.tree-error {
+  padding: 6px 15px;
+  font-size: 12px;
+  color: #F14C4C;
+  white-space: normal;
+  word-break: break-word;
+}
+
 #file-tree {
   flex: 1;
   overflow-y: auto;
