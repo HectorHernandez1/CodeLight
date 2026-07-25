@@ -2,6 +2,8 @@
 
 Ordered roadmap — work top to bottom. (Created 2026-07-19; bugs found while using the app slot in above features as they appear.)
 
+**v1.6.4 released 2026-07-25** ([GitHub release](https://github.com/HectorHernandez1/CodeLight/releases/tag/v1.6.4)): universal binary, VS Code Dark Modern theme, integrated terminal, project-wide search — items #1, #2, #4, #5 below. Unsigned until #3.
+
 ## 1. Improve contrast — *quick win, target v1.6.4*
 
 - [x] Brighten comments (`#5C6370`, 2.32:1) and line numbers (`#495162`, 1.76:1) — both far below the WCAG AA minimum of 4.5:1 against the `#282C34` background. Main text (6.57:1), keywords (5.92:1), and strings (6.94:1) are fine. *(Done 2026-07-25: resolved by switching the dark theme to VS Code Dark Modern style — comments `#6A9955` 5.0:1, line numbers `#8A8A8A` 4.8:1 on `#1F1F1F`, both AA.)*
