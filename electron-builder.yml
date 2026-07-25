@@ -5,7 +5,9 @@ copyright: Copyright © 2026 Hector
 mac:
   category: public.app-category.developer-tools
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - universal
   icon: assets/icon.png
   darkModeSupport: true
 

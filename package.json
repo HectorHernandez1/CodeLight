@@ -1,6 +1,6 @@
 {
     "name": "codelight",
-    "version": "1.6.3",
+    "version": "1.6.4",
     "description": "A lightweight, minimalist code editor for macOS",
     "main": "src/main.js",
     "author": "Hector",
@@ -18,23 +18,7 @@
         "electron": "^27.0.0",
         "electron-builder": "^24.9.1"
     },
-    "build": {
-        "appId": "com.codelight.app",
-        "productName": "CodeLight",
-        "mac": {
-            "category": "public.app-category.developer-tools",
-            "target": [
-                "dmg"
-            ],
-            "icon": "assets/icon.png"
-        },
-        "files": [
-            "src/**/*",
-            "assets/**/*",
-            "node_modules/**/*"
-        ],
-        "directories": {
-            "output": "dist"
-        }
+    "allowScripts": {
+        "electron@27.0.0": true
     }
 }

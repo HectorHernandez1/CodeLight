@@ -9,7 +9,7 @@ Ordered roadmap — work top to bottom. (Created 2026-07-19; bugs found while us
 
 ## 2. Universal binary — *deadline: before August 20, 2026 (M-series Mac arrives), target v1.6.4*
 
-- [ ] Build a single universal DMG (one download, works on Intel + Apple Silicon) instead of today's Intel-only `x64` build.
+- [x] Build a single universal DMG (one download, works on Intel + Apple Silicon) instead of today's Intel-only `x64` build. *(Done 2026-07-25 on the M5 — `CodeLight-1.6.4-universal.dmg`, 161MB, `lipo` verified x86_64+arm64.)*
 - Config-only change in `electron-builder.yml` (`arch: universal` on the dmg target); cross-building from the Intel laptop is supported. Est. under an hour including a test build.
 - Size: DMG grows from ~111MB to roughly ~180MB — still under the 200MB target.
 - Must land **before** the integrated terminal (see #5): current deps are pure JS; node-pty is a native module and is much easier to add to an already-working universal pipeline.
