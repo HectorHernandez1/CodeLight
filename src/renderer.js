@@ -98,23 +98,24 @@ class CodeLightApp {
                         base: 'vs-dark',
                         inherit: true,
                         rules: [
-                            { token: 'comment', foreground: '5C6370', fontStyle: 'italic' },
-                            { token: 'keyword', foreground: 'C678DD' },
-                            { token: 'string', foreground: '98C379' },
-                            { token: 'number', foreground: 'D19A66' },
-                            { token: 'type', foreground: 'E5C07B' },
-                            { token: 'function', foreground: '61AFEF' },
-                            { token: 'variable', foreground: 'E06C75' }
+                            { token: 'comment', foreground: '6A9955' },
+                            { token: 'keyword', foreground: '569CD6' },
+                            { token: 'string', foreground: 'CE9178' },
+                            { token: 'number', foreground: 'B5CEA8' },
+                            { token: 'type', foreground: '4EC9B0' },
+                            { token: 'function', foreground: 'DCDCAA' },
+                            { token: 'variable', foreground: '9CDCFE' }
                         ],
                         colors: {
-                            'editor.background': '#282C34',
-                            'editor.foreground': '#ABB2BF',
-                            'editorLineNumber.foreground': '#495162',
-                            'editorLineNumber.activeForeground': '#ABB2BF',
-                            'editor.selectionBackground': '#3E4451',
-                            'editor.lineHighlightBackground': '#2C313A',
-                            'editorCursor.foreground': '#528BFF',
-                            'editorWhitespace.foreground': '#3B4048'
+                            'editor.background': '#1F1F1F',
+                            'editor.foreground': '#CCCCCC',
+                            // Brighter than stock VS Code (#6E7681, 3.6:1) to pass WCAG AA
+                            'editorLineNumber.foreground': '#8A8A8A',
+                            'editorLineNumber.activeForeground': '#CCCCCC',
+                            'editor.selectionBackground': '#264F78',
+                            'editor.lineHighlightBackground': '#282828',
+                            'editorCursor.foreground': '#AEAFAD',
+                            'editorWhitespace.foreground': '#3B3B3B'
                         }
                     });
 

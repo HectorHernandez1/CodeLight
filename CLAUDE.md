@@ -80,12 +80,15 @@ npm run build
 
 ## Theme Colors (Dark)
 
+VS Code Dark Modern style. Line numbers are brighter than stock VS Code
+(#6E7681) so they pass WCAG AA (4.5:1) against the background.
+
 ```css
---background: #282C34;
---text: #ABB2BF;
---keywords: #61AFEF;
---strings: #98C379;
---comments: #5C6370;
---line-numbers: #495162;
---selection: #3E4451;
+--background: #1F1F1F;
+--text: #CCCCCC;
+--keywords: #569CD6;
+--strings: #CE9178;
+--comments: #6A9955;
+--line-numbers: #8A8A8A;
+--selection: #264F78;
 ```
