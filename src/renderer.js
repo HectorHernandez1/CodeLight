@@ -6,6 +6,7 @@ import { ThemeManager } from './modules/theme.js';
 import { StorageManager } from './modules/storage.js';
 import { ShortcutManager } from './modules/shortcuts.js';
 import { TerminalManager } from './modules/terminal.js';
+import { SearchManager } from './modules/search.js';
 
 // Monaco Editor loader path for node_modules
 const MONACO_PATH = '../node_modules/monaco-editor/min/vs';
@@ -29,6 +30,7 @@ class CodeLightApp {
         this.files = new FileManager(this);
         this.shortcuts = new ShortcutManager(this);
         this.terminal = new TerminalManager(this);
+        this.search = new SearchManager(this);
 
         this.init();
     }

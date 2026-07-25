@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     unwatchFolder: () => ipcRenderer.invoke('unwatch-folder'),
     onFolderChanged: (callback) => ipcRenderer.on('folder-changed', (event, data) => callback(data)),
 
+    // Project-wide search
+    searchInFolder: (query, options) => ipcRenderer.invoke('search-in-folder', query, options),
+    onFindInFiles: (callback) => ipcRenderer.on('menu-find-in-files', callback),
+
     // Integrated terminal
     terminalCreate: (opts) => ipcRenderer.invoke('terminal-create', opts),
     terminalInput: (data) => ipcRenderer.send('terminal-input', data),

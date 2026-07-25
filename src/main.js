@@ -295,6 +295,11 @@ function createMenu() {
           accelerator: 'CmdOrCtrl+H',
           click: () => getFocusedWindow()?.webContents.send('menu-replace')
         },
+        {
+          label: 'Find in Files...',
+          accelerator: 'CmdOrCtrl+Shift+F',
+          click: () => getFocusedWindow()?.webContents.send('menu-find-in-files')
+        },
         { type: 'separator' },
         {
           label: 'Go to Line...',
@@ -637,6 +642,88 @@ ipcMain.handle('watch-folder', async (event, folderPath) => {
 ipcMain.handle('unwatch-folder', async (event) => {
   cleanupWatcher(event.sender.id);
   return { success: true };
+});
+
+// Project-wide search
+const SEARCH_SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '__pycache__', 'venv', '.venv']);
+const SEARCH_MAX_FILE_SIZE = 1024 * 1024; // skip files over 1MB
+const SEARCH_MAX_RESULTS = 2000;
+
+ipcMain.handle('search-in-folder', async (event, query, options) => {
+  try {
+    const folder = allowedFolders.get(event.sender.id);
+    if (!folder) {
+      return { success: false, error: 'Open a folder to search' };
+    }
+    if (typeof query !== 'string' || query.length < 2) {
+      return { success: true, results: [], filesSearched: 0, truncated: false };
+    }
+
+    const caseSensitive = !!(options && options.caseSensitive);
+    const needle = caseSensitive ? query : query.toLowerCase();
+    const results = [];
+    let filesSearched = 0;
+    let truncated = false;
+
+    async function searchFile(filePath) {
+      let buf;
+      try {
+        const stat = await fs.stat(filePath);
+        if (stat.size > SEARCH_MAX_FILE_SIZE) return;
+        buf = await fs.readFile(filePath);
+      } catch (err) {
+        return;
+      }
+      if (buf.includes(0)) return; // binary file
+      filesSearched++;
+
+      const lines = buf.toString('utf-8').split('\n');
+      for (let i = 0; i < lines.length && !truncated; i++) {
+        const haystack = caseSensitive ? lines[i] : lines[i].toLowerCase();
+        let idx = haystack.indexOf(needle);
+        while (idx !== -1) {
+          results.push({
+            file: filePath,
+            relPath: path.relative(folder, filePath),
+            line: i + 1,
+            col: idx + 1,
+            text: lines[i].slice(0, 300),
+            matchLength: query.length
+          });
+          if (results.length >= SEARCH_MAX_RESULTS) {
+            truncated = true;
+            break;
+          }
+          idx = haystack.indexOf(needle, idx + needle.length);
+        }
+      }
+    }
+
+    async function walk(dir) {
+      if (truncated) return;
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        return;
+      }
+      for (const entry of entries) {
+        if (truncated) return;
+        if (entry.name.startsWith('.') || SEARCH_SKIP_DIRS.has(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else if (entry.isFile()) {
+          await searchFile(full);
+        }
+      }
+    }
+
+    await walk(folder);
+    return { success: true, results, filesSearched, truncated };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // Integrated terminal

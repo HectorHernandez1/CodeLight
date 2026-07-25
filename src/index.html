@@ -19,9 +19,18 @@
     <!-- Sidebar -->
     <div id="sidebar">
       <div id="sidebar-header">
-        <span class="sidebar-title">EXPLORER</span>
+        <span class="sidebar-tab active" data-view="explorer">EXPLORER</span>
+        <span class="sidebar-tab" data-view="search">SEARCH</span>
       </div>
       <div id="file-tree"></div>
+      <div id="search-view" class="hidden">
+        <div id="search-input-row">
+          <input type="text" id="search-input" placeholder="Search" spellcheck="false">
+          <button id="search-case-toggle" title="Match case">Aa</button>
+        </div>
+        <div id="search-summary"></div>
+        <div id="search-results"></div>
+      </div>
     </div>
 
     <!-- Resize handle for sidebar -->

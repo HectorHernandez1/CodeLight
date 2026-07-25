@@ -23,7 +23,7 @@ Ordered roadmap — work top to bottom. (Created 2026-07-19; bugs found while us
 
 ## 4. Project-wide search
 
-- [ ] Search text across all files in the open folder (Cmd+Shift+F), with results list → click to open at match.
+- [x] Search text across all files in the open folder (Cmd+Shift+F), with results list → click to open at match. *(Done 2026-07-25: SEARCH tab in the sidebar next to EXPLORER; live search with case toggle, results grouped by file, click jumps to the match selected in the editor. File walk + matching run in the main process; skips node_modules/.git/binaries/files >1MB, capped at 2000 matches.)*
 - Today only per-file find/replace exists (Monaco built-ins). Biggest day-to-day feature gap for a code editor.
 
 ## 5. Integrated terminal window — *largest feature, deliberately last*

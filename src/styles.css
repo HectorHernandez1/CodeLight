@@ -150,6 +150,8 @@ body {
 }
 
 #sidebar-header {
+  display: flex;
+  gap: 14px;
   padding: 10px 15px;
   font-size: 11px;
   font-weight: 600;
@@ -157,6 +159,126 @@ body {
   color: var(--text-secondary);
   text-transform: uppercase;
   -webkit-app-region: drag;
+}
+
+.sidebar-tab {
+  cursor: pointer;
+  padding-bottom: 3px;
+  border-bottom: 1px solid transparent;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+}
+
+/* Search view */
+#search-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#file-tree.hidden,
+#search-view.hidden {
+  display: none;
+}
+
+#search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 8px;
+}
+
+#search-input {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 6px;
+  outline: none;
+}
+
+#search-input:focus {
+  border-color: var(--tab-active-border);
+}
+
+#search-case-toggle {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 5px;
+}
+
+#search-case-toggle:hover {
+  background-color: var(--bg-hover);
+}
+
+#search-case-toggle.active {
+  color: var(--text-primary);
+  border-color: var(--tab-active-border);
+  background-color: var(--bg-hover);
+}
+
+#search-summary {
+  padding: 0 10px 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+#search-results {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.search-file-header {
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-file-count {
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.search-match {
+  padding: 2px 10px 2px 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.search-match:hover {
+  background-color: var(--bg-hover);
+}
+
+.search-match .match-highlight {
+  background-color: #613214;
+  color: var(--text-primary);
+  border-radius: 2px;
+}
+
+body.light-theme .search-match .match-highlight {
+  background-color: #F8C9AB;
 }
 
 #file-tree {
