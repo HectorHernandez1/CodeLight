@@ -60,6 +60,14 @@ class CodeLightApp {
         // Update UI
         this.updateEmptyState();
         this.updateStatusBar();
+
+        // Discreet version label in the status bar
+        try {
+            const version = await window.electronAPI.getAppVersion();
+            document.getElementById('status-version').textContent = `v${version}`;
+        } catch (err) {
+            // Version label is cosmetic; never block startup on it
+        }
     }
 
     async loadPreferences() {

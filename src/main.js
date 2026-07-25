@@ -549,6 +549,10 @@ ipcMain.handle('get-app-path', () => {
   return app.getPath('userData');
 });
 
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
 // Update dock menu when folder is opened
 ipcMain.handle('set-open-folder', (event, folderPath) => {
   currentOpenFolder = folderPath;

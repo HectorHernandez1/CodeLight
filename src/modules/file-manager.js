@@ -143,15 +143,17 @@ export class FileManager {
         const container = document.getElementById('file-tree');
         container.innerHTML = '';
 
-        // Create parent folder header at the top showing full path
+        // Create parent folder header at the top showing the folder name
+        // (full path available on hover)
         const headerItem = document.createElement('div');
         headerItem.className = 'tree-item tree-root-header';
+        headerItem.title = folderPath;
         const headerIcon = document.createElement('span');
         headerIcon.className = 'tree-item-icon';
         headerIcon.textContent = '📂';
         const headerName = document.createElement('span');
         headerName.className = 'tree-item-name';
-        headerName.textContent = folderPath;
+        headerName.textContent = this.basename(folderPath);
         headerItem.appendChild(headerIcon);
         headerItem.appendChild(headerName);
 

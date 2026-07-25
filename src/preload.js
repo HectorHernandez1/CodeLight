@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showSaveDialog: () => ipcRenderer.invoke('show-save-dialog'),
     showMessageBox: (options) => ipcRenderer.invoke('show-message-box', options),
     getAppPath: () => ipcRenderer.invoke('get-app-path'),
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     getGitStatus: (folderPath) => ipcRenderer.invoke('get-git-status', folderPath),
     setOpenFolder: (folderPath) => ipcRenderer.invoke('set-open-folder', folderPath),
 

@@ -647,6 +647,10 @@ body.light-theme .search-match .match-highlight {
    Status Bar
    ============================================ */
 
+#status-version {
+  opacity: 0.55;
+}
+
 #status-bar {
   height: var(--status-bar-height);
   min-height: var(--status-bar-height);
