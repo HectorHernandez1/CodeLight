@@ -2,7 +2,13 @@
 
 Ordered roadmap — work top to bottom. (Created 2026-07-19; bugs found while using the app slot in above features as they appear.)
 
-**v1.6.4 released 2026-07-25** ([GitHub release](https://github.com/HectorHernandez1/CodeLight/releases/tag/v1.6.4)): universal binary, VS Code Dark Modern theme, integrated terminal, project-wide search — items #1, #2, #4, #5 below. Unsigned until #3.
+**v1.6.4 released 2026-07-25** ([GitHub release](https://github.com/HectorHernandez1/CodeLight/releases/tag/v1.6.4)): universal binary, VS Code Dark Modern theme, integrated terminal, project-wide search — items #1, #2, #4, #5 below. Unsigned until #3. Also landed same day (release assets refreshed): file tree shows folder name not full path, discreet version label in status bar, diagnostic logging to `~/Library/Application Support/CodeLight/codelight.log` (see README Troubleshooting), and a size/startup pass — app.asar 93MB→16MB by excluding unused Monaco builds + non-mac node-pty binaries, split editor and xterm now lazy-load.
+
+## Up next
+
+- [ ] **Apple Developer account** (Hector) — unblocks #3 below; approval can take days, sign up early.
+- [ ] **Move `~/Desktop/repo` out of iCloud sync** (Hector) — iCloud fought every `npm install` during the M5 migration; do this before the next dependency change.
+- [ ] Possible future size pass: prune transitive `electron-updater` dependencies. Bigger surgery, low urgency.
 
 ## 1. Improve contrast — *quick win, target v1.6.4*
 
