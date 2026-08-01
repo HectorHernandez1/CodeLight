@@ -102,6 +102,23 @@ export class FileManager {
     }
 
     async openFolder(folderPath) {
+        // Verify the folder still exists before touching any state — a folder
+        // restored from a previous session may have been moved or deleted.
+        const check = await window.electronAPI.checkFolder(folderPath);
+        if (!check.success) {
+            window.electronAPI.logEvent('warn', `open folder skipped: ${folderPath}: ${check.code || ''} ${check.error}`);
+            const detail = check.code === 'ENOENT'
+                ? `"${folderPath}" no longer exists. It may have been moved or deleted.`
+                : `"${folderPath}" could not be opened: ${check.error}`;
+            await window.electronAPI.showMessageBox({
+                type: 'warning',
+                message: 'Cannot open folder',
+                detail,
+                buttons: ['OK']
+            });
+            return false;
+        }
+
         // Stop watching previous folder if any
         if (this.isWatching) {
             await window.electronAPI.unwatchFolder();
@@ -137,6 +154,7 @@ export class FileManager {
             this.isWatching = true;
             console.log('Started watching folder:', folderPath);
         }
+        return true;
     }
 
     async renderFileTree(folderPath) {
@@ -184,7 +202,13 @@ export class FileManager {
             window.electronAPI.logEvent('error', `open folder failed: ${folderPath}: ${result.error}`);
             const errorItem = document.createElement('div');
             errorItem.className = 'tree-error';
-            errorItem.textContent = `Cannot read folder: ${result.error}`;
+            if (result.code === 'ENOENT') {
+                errorItem.textContent = 'This folder no longer exists. It may have been moved or deleted.';
+            } else if (result.code === 'EACCES' || result.code === 'EPERM') {
+                errorItem.textContent = 'Permission denied reading this folder.';
+            } else {
+                errorItem.textContent = `Cannot read folder: ${result.error}`;
+            }
             childrenContainer.appendChild(errorItem);
         }
         container.appendChild(childrenContainer);

@@ -1127,10 +1127,14 @@ class CodeLightApp {
         const session = await this.storage.get('session');
         if (!session) return;
 
+        let folderGone = false;
         if (session.openFolder) {
-            await this.files.openFolder(session.openFolder);
+            const opened = await this.files.openFolder(session.openFolder);
+            folderGone = !opened;
         }
 
+        // Tabs for files inside a deleted folder fail readFile and are
+        // skipped; untitled tabs still restore from their stored content
         for (const tabData of session.tabs || []) {
             if (tabData.path) {
                 const result = await window.electronAPI.readFile(tabData.path);
@@ -1150,6 +1154,12 @@ class CodeLightApp {
             if (tab) {
                 this.activateTab(tab.id);
             }
+        }
+
+        if (folderGone) {
+            // Drop the deleted folder from the saved session so the next
+            // launch doesn't hit the same error
+            await this.saveSession();
         }
     }
 

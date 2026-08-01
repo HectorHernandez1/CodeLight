@@ -460,6 +460,22 @@ ipcMain.handle('write-file', async (event, filePath, content) => {
   }
 });
 
+// Existence check used before opening a folder, so a deleted/moved folder
+// (e.g. restored from a stale session) is caught before any state changes.
+// Runs before set-open-folder, so it can't go through validateFileAccess.
+ipcMain.handle('check-folder', async (event, folderPath) => {
+  try {
+    const stats = await fs.stat(path.resolve(folderPath));
+    if (!stats.isDirectory()) {
+      return { success: false, code: 'ENOTDIR', error: 'Not a folder' };
+    }
+    return { success: true };
+  } catch (err) {
+    logToFile('warn', `check-folder failed: ${folderPath}: ${err.code || ''} ${err.message}`);
+    return { success: false, code: err.code, error: err.message };
+  }
+});
+
 ipcMain.handle('read-directory', async (event, dirPath) => {
   try {
     const resolved = validateFileAccess(event.sender.id, dirPath);
@@ -482,7 +498,7 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
     return { success: true, items };
   } catch (err) {
     logToFile('error', `read-directory failed: ${dirPath}: ${err.code || ''} ${err.message}`);
-    return { success: false, error: err.message };
+    return { success: false, code: err.code, error: err.message };
   }
 });
 

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
     writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
     readDirectory: (dirPath) => ipcRenderer.invoke('read-directory', dirPath),
+    checkFolder: (folderPath) => ipcRenderer.invoke('check-folder', folderPath),
     showSaveDialog: () => ipcRenderer.invoke('show-save-dialog'),
     showMessageBox: (options) => ipcRenderer.invoke('show-message-box', options),
     getAppPath: () => ipcRenderer.invoke('get-app-path'),
